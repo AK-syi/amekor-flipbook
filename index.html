@@ -430,10 +430,7 @@
   let isAnimating = false;
   let isMobileMode = false;
 
-  // On-demand render cache: pageIdx → { canvas, scale }
-  const renderCache = new Map();
-  const CACHE_SIZE = 10; // keep nearby pages cached
-  const thumbCanvases = []; // tiny thumbnails rendered once
+  const thumbCanvases = []; // tiny thumbnails rendered once at load
 
   const UA = navigator.userAgent;
   const isIPhone = /iPhone/.test(UA);
@@ -453,56 +450,6 @@
   const loadText = document.getElementById('loadText');
   const loadProgress = document.getElementById('loadProgress');
   const thumbStrip = document.getElementById('thumbStrip');
-
-  /**
-   * Render a PDF page to canvas at given scale. Uses cache when available.
-   * @param {number} pageIdx - 0-based page index
-   * @param {number} scale - pdf.js viewport scale
-   * @returns {Promise<HTMLCanvasElement>}
-   */
-  async function renderPageAtScale(pageIdx, scale) {
-    const cacheKey = pageIdx;
-    const cached = renderCache.get(cacheKey);
-    if (cached && Math.abs(cached.scale - scale) < 0.01) return cached.canvas;
-
-    const page = await pdfDoc.getPage(pageIdx + 1);
-    const vp = page.getViewport({ scale });
-    const canvas = document.createElement('canvas');
-    canvas.width = vp.width;
-    canvas.height = vp.height;
-    const ctx = canvas.getContext('2d');
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-    await page.render({ canvasContext: ctx, viewport: vp }).promise;
-
-    // LRU eviction
-    renderCache.set(cacheKey, { canvas, scale });
-    if (renderCache.size > CACHE_SIZE) {
-      const oldest = renderCache.keys().next().value;
-      renderCache.delete(oldest);
-    }
-
-    return canvas;
-  }
-
-  /**
-   * Calculate optimal render scale for display: match container size × DPR.
-   * This gives pixel-perfect rendering without wasting memory.
-   */
-  function displayScaleForContainer(cw, ch) {
-    if (!pdfDoc || totalPages === 0) return 4;
-    const dpr = window.devicePixelRatio || 1;
-    // Use aspect ratio to figure needed pixel height
-    const targetH = ch * dpr;
-    // PDF page 1 at scale=1 gives us base dimensions
-    // pageAspect = baseW/baseH, so baseH = baseW/pageAspect
-    // We want vp.height = targetH → scale = targetH / (baseH at scale=1)
-    // baseH at scale=1 = pdfBaseHeight
-    // We stored pageAspect from first page, but we need actual base dims
-    // Use a minimum scale of 3 to ensure quality
-    const baseScale = targetH / (pdfBaseHeight || 792);
-    return Math.max(isMobile ? 2.5 : 3, baseScale);
-  }
 
   let pdfBaseWidth = 612, pdfBaseHeight = 792; // defaults, updated on load
 
@@ -558,51 +505,9 @@
     await showSpread(currentSpread);
     loader.classList.remove('active');
 
-    // Pre-cache adjacent pages in background
-    prefetchAround(currentSpread);
-
   } catch (e) {
     loadText.textContent = 'Failed to load PDF';
     loadProgress.textContent = e.message || String(e);
-  }
-
-  /** Pre-render nearby pages so flipping is instant */
-  async function prefetchAround(spreadIdx) {
-    const pages = [];
-    if (isMobileMode) {
-      for (let d = -1; d <= 2; d++) {
-        const p = spreadIdx + d;
-        if (p >= 0 && p < totalPages) pages.push(p);
-      }
-    } else {
-      for (let d = -1; d <= 1; d++) {
-        const s = spreadIdx + d;
-        if (s >= 0 && s <= maxSpread()) {
-          pages.push(s * 2);
-          if (s * 2 + 1 < totalPages) pages.push(s * 2 + 1);
-        }
-      }
-    }
-    const scale = currentDisplayScale();
-    for (const p of pages) {
-      if (!renderCache.has(p) || Math.abs(renderCache.get(p).scale - scale) > 0.5) {
-        renderPageAtScale(p, scale).catch(() => {});
-      }
-    }
-  }
-
-  function currentDisplayScale() {
-    const header = document.querySelector('.header');
-    const isFS = document.body.classList.contains('fullscreen-active');
-    const headerH = isFS ? 0 : header.offsetHeight;
-    const sideNavW = window.innerWidth <= 700 ? 32 : 48;
-    const availH = window.innerHeight - headerH - 16;
-    const dpr = window.devicePixelRatio || 1;
-    // Each page display is roughly half the book height
-    const pageDisplayH = availH;
-    const targetPx = pageDisplayH * dpr;
-    const scale = targetPx / pdfBaseHeight;
-    return Math.max(isMobile ? 2 : 3, scale);
   }
 
   // ── Sizing ──
@@ -643,8 +548,6 @@
   window.addEventListener('resize', () => {
     const modeChanged = checkMobileMode();
     sizeBook();
-    // Invalidate cache on resize — display scale changed
-    renderCache.clear();
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
       if (totalPages > 0) {
@@ -661,39 +564,61 @@
   });
 
   // ── Display helpers ──
-  function makeDisplayCanvas(src, cw, ch) {
+
+  /**
+   * Calculate PDF.js scale to fill container at device pixel ratio.
+   * Uses a high minimum so text/details stay crisp.
+   */
+  function scaleForContainer(cw, ch) {
     const dpr = window.devicePixelRatio || 1;
-    const srcAspect = src.width / src.height;
     const contAspect = cw / ch;
-    let dw, dh;
-    if (contAspect > srcAspect) {
-      dh = ch; dw = dh * srcAspect;
+    let targetW;
+    if (contAspect > pageAspect) {
+      // container wider than page — height-limited
+      targetW = ch * pageAspect * dpr;
     } else {
-      dw = cw; dh = dw / srcAspect;
+      targetW = cw * dpr;
     }
-    const c = document.createElement('canvas');
-    c.width = Math.max(1, Math.round(dw * dpr));
-    c.height = Math.max(1, Math.round(dh * dpr));
-    const ctx = c.getContext('2d');
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(src, 0, 0, c.width, c.height);
-    c.style.width = dw + 'px';
-    c.style.height = dh + 'px';
-    c.style.display = 'block';
-    return c;
+    const scale = targetW / pdfBaseWidth;
+    // Minimum scale 3 ensures crisp rendering even on small displays
+    return Math.max(isMobile ? 2.5 : 3, scale);
   }
 
+  /**
+   * Render PDF page directly into container — single render, no copies.
+   */
   async function renderPageToContainer(container, idx) {
     container.innerHTML = '';
     if (idx < totalPages) {
       container.style.background = 'none';
-      const scale = currentDisplayScale();
-      const src = await renderPageAtScale(idx, scale);
       const cw = container.clientWidth || 1;
       const ch = container.clientHeight || 1;
-      const c = makeDisplayCanvas(src, cw, ch);
+      const scale = scaleForContainer(cw, ch);
+
+      // Render PDF directly to canvas
+      const page = await pdfDoc.getPage(idx + 1);
+      const vp = page.getViewport({ scale });
+      const c = document.createElement('canvas');
+      c.width = vp.width;
+      c.height = vp.height;
+      const ctx = c.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      await page.render({ canvasContext: ctx, viewport: vp }).promise;
+
+      // CSS sizing to fit container (browser downscales crispy)
+      const contAspect = cw / ch;
+      let dw, dh;
+      if (contAspect > pageAspect) {
+        dh = ch; dw = dh * pageAspect;
+      } else {
+        dw = cw; dh = dw / pageAspect;
+      }
+      c.style.width = dw + 'px';
+      c.style.height = dh + 'px';
+      c.style.display = 'block';
       container.appendChild(c);
+
       const pn = document.createElement('div');
       pn.className = 'page-num';
       pn.textContent = idx + 1;
@@ -704,16 +629,35 @@
     }
   }
 
-  /** Sync version using cache — for flip animation faces (must be instant) */
+  /**
+   * Sync version for flip animation faces — uses thumbnail as instant placeholder.
+   * After flip lands, showSpread re-renders at full quality.
+   */
   function renderPageToContainerSync(container, idx) {
     container.innerHTML = '';
     if (idx < totalPages) {
       container.style.background = 'none';
-      const cached = renderCache.get(idx);
-      const src = cached ? cached.canvas : thumbCanvases[idx]; // fallback to thumb
+      const src = thumbCanvases[idx];
       const cw = container.clientWidth || 1;
       const ch = container.clientHeight || 1;
-      const c = makeDisplayCanvas(src, cw, ch);
+      const contAspect = cw / ch;
+      let dw, dh;
+      if (contAspect > pageAspect) {
+        dh = ch; dw = dh * pageAspect;
+      } else {
+        dw = cw; dh = dw / pageAspect;
+      }
+      const c = document.createElement('canvas');
+      const dpr = window.devicePixelRatio || 1;
+      c.width = Math.max(1, Math.round(dw * dpr));
+      c.height = Math.max(1, Math.round(dh * dpr));
+      const ctx = c.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(src, 0, 0, c.width, c.height);
+      c.style.width = dw + 'px';
+      c.style.height = dh + 'px';
+      c.style.display = 'block';
       container.appendChild(c);
       const pn = document.createElement('div');
       pn.className = 'page-num';
@@ -738,7 +682,6 @@
       ]);
       updateIndicators(spreadIdx);
     }
-    prefetchAround(spreadIdx);
   }
 
   function maxSpread() {
@@ -827,9 +770,23 @@
     const halfH = displayLeft.clientHeight || 1;
     const clonePage = (idx) => {
       if (idx >= totalPages) return null;
-      const cached = renderCache.get(idx);
-      const src = cached ? cached.canvas : thumbCanvases[idx];
-      return makeDisplayCanvas(src, halfW, halfH);
+      const src = thumbCanvases[idx];
+      const dpr = window.devicePixelRatio || 1;
+      const contAspect = halfW / halfH;
+      let dw, dh;
+      if (contAspect > pageAspect) { dh = halfH; dw = dh * pageAspect; }
+      else { dw = halfW; dh = dw / pageAspect; }
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(dw * dpr));
+      c.height = Math.max(1, Math.round(dh * dpr));
+      const ctx = c.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(src, 0, 0, c.width, c.height);
+      c.style.width = dw + 'px';
+      c.style.height = dh + 'px';
+      c.style.display = 'block';
+      return c;
     };
 
     const newLeftIdx = newSpread * 2;
@@ -855,7 +812,6 @@
         currentSpread = newSpread;
         updateIndicators(currentSpread);
         isAnimating = false;
-        prefetchAround(currentSpread);
       }, { once: true });
     } else {
       flipEl.style.left = '0';
@@ -876,7 +832,6 @@
         currentSpread = newSpread;
         updateIndicators(currentSpread);
         isAnimating = false;
-        prefetchAround(currentSpread);
       }, { once: true });
     }
   }
@@ -933,7 +888,6 @@
   };
   document.addEventListener('fullscreenchange', () => {
     if (!document.fullscreenElement) document.body.classList.remove('fullscreen-active');
-    renderCache.clear();
     requestAnimationFrame(() => { sizeBook(); showSpread(currentSpread); });
   });
   if (isIPhone) document.getElementById('fullscreenBtn').style.display = 'none';
