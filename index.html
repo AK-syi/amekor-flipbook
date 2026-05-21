@@ -322,6 +322,19 @@
 
   .fullscreen-active .header { display: none; }
 
+  /* ── Embed mode: compact header, maximize book space ── */
+  .embed-mode .header {
+    padding: 6px 16px;
+  }
+  .embed-mode .logo { font-size: 1rem; }
+  .embed-mode .side-nav { width: 36px; }
+  .embed-mode .side-nav-btn { width: 30px; height: 56px; font-size: 16px; }
+  .embed-mode .thumb-strip { left: 36px; right: 36px; }
+  .embed-mode .book-area { padding: 4px 0; }
+
+  /* ── no-header mode: hide header entirely ── */
+  .no-header .header { display: none; }
+
   /* ── Mobile single-page mode ── */
   .mobile-mode .book { transform: none; }
   .mobile-mode .book::before { display: none; }
@@ -407,6 +420,11 @@
   const pdfUrl = params.get('pdf');
   const catalogTitle = params.get('title') || 'Catalog';
   const startPage = parseInt(params.get('page') || '1', 10);
+
+  const embedMode = params.has('embed');
+  const noHeader = params.has('noheader');
+  if (embedMode) document.body.classList.add('embed-mode');
+  if (noHeader) document.body.classList.add('no-header');
 
   document.getElementById('catalogTitle').innerHTML =
     'AMEKOR <span>' + catalogTitle.toUpperCase().replace(/[<>"'&]/g, '') + '</span>';
