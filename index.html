@@ -423,6 +423,7 @@
 
   const embedMode = params.has('embed');
   const noHeader = params.has('noheader');
+  const forceSpread = params.has('spread');
   if (embedMode) document.body.classList.add('embed-mode');
   if (noHeader) document.body.classList.add('no-header');
 
@@ -474,7 +475,7 @@
   // ── Detect mobile → single page mode ──
   function checkMobileMode() {
     const wasMobile = isMobileMode;
-    isMobileMode = window.innerWidth < 700;
+    isMobileMode = forceSpread ? false : window.innerWidth < 700;
     if (isMobileMode) {
       stage.classList.add('mobile-mode');
     } else {
