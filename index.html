@@ -424,12 +424,16 @@
 
   // ── State ──
   let pdfDoc = null;
-  let pageCanvases = [];
   let pageAspect = 1;
   let currentSpread = 0;
   let totalPages = 0;
   let isAnimating = false;
   let isMobileMode = false;
+
+  // On-demand render cache: pageIdx → { canvas, scale }
+  const renderCache = new Map();
+  const CACHE_SIZE = 10; // keep nearby pages cached
+  const thumbCanvases = []; // tiny thumbnails rendered once
 
   const UA = navigator.userAgent;
   const isIPhone = /iPhone/.test(UA);
@@ -437,7 +441,6 @@
   const isAndroidPhone = /Android/.test(UA) && /Mobile/.test(UA);
   const isMobile = isIPhone || isAndroidPhone || (window.innerWidth < 768 && 'ontouchstart' in window);
   const isTablet = isIPad || (/Android/.test(UA) && !/Mobile/.test(UA));
-  const RENDER_SCALE = isMobile ? 2 : (isTablet ? 3 : 4);
 
   const stage = document.getElementById('stage');
   const book = document.getElementById('book');
@@ -450,6 +453,58 @@
   const loadText = document.getElementById('loadText');
   const loadProgress = document.getElementById('loadProgress');
   const thumbStrip = document.getElementById('thumbStrip');
+
+  /**
+   * Render a PDF page to canvas at given scale. Uses cache when available.
+   * @param {number} pageIdx - 0-based page index
+   * @param {number} scale - pdf.js viewport scale
+   * @returns {Promise<HTMLCanvasElement>}
+   */
+  async function renderPageAtScale(pageIdx, scale) {
+    const cacheKey = pageIdx;
+    const cached = renderCache.get(cacheKey);
+    if (cached && Math.abs(cached.scale - scale) < 0.01) return cached.canvas;
+
+    const page = await pdfDoc.getPage(pageIdx + 1);
+    const vp = page.getViewport({ scale });
+    const canvas = document.createElement('canvas');
+    canvas.width = vp.width;
+    canvas.height = vp.height;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    await page.render({ canvasContext: ctx, viewport: vp }).promise;
+
+    // LRU eviction
+    renderCache.set(cacheKey, { canvas, scale });
+    if (renderCache.size > CACHE_SIZE) {
+      const oldest = renderCache.keys().next().value;
+      renderCache.delete(oldest);
+    }
+
+    return canvas;
+  }
+
+  /**
+   * Calculate optimal render scale for display: match container size × DPR.
+   * This gives pixel-perfect rendering without wasting memory.
+   */
+  function displayScaleForContainer(cw, ch) {
+    if (!pdfDoc || totalPages === 0) return 4;
+    const dpr = window.devicePixelRatio || 1;
+    // Use aspect ratio to figure needed pixel height
+    const targetH = ch * dpr;
+    // PDF page 1 at scale=1 gives us base dimensions
+    // pageAspect = baseW/baseH, so baseH = baseW/pageAspect
+    // We want vp.height = targetH → scale = targetH / (baseH at scale=1)
+    // baseH at scale=1 = pdfBaseHeight
+    // We stored pageAspect from first page, but we need actual base dims
+    // Use a minimum scale of 3 to ensure quality
+    const baseScale = targetH / (pdfBaseHeight || 792);
+    return Math.max(isMobile ? 2.5 : 3, baseScale);
+  }
+
+  let pdfBaseWidth = 612, pdfBaseHeight = 792; // defaults, updated on load
 
   // ── Detect mobile → single page mode ──
   function checkMobileMode() {
@@ -470,38 +525,84 @@
     pdfDoc = await pdfjsLib.getDocument({ url: pdfUrl }).promise;
     totalPages = pdfDoc.numPages;
 
-    loadText.textContent = 'Rendering pages…';
-    for (let p = 1; p <= totalPages; p++) {
-      loadProgress.textContent = `Page ${p} / ${totalPages}`;
-      const page = await pdfDoc.getPage(p);
-      const vp = page.getViewport({ scale: RENDER_SCALE });
-      const canvas = document.createElement('canvas');
-      canvas.width = vp.width;
-      canvas.height = vp.height;
-      const ctx = canvas.getContext('2d');
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
-      await page.render({ canvasContext: ctx, viewport: vp }).promise;
-      pageCanvases.push(canvas);
-    }
+    // Get base dimensions from first page
+    const firstPage = await pdfDoc.getPage(1);
+    const baseVp = firstPage.getViewport({ scale: 1 });
+    pdfBaseWidth = baseVp.width;
+    pdfBaseHeight = baseVp.height;
+    pageAspect = pdfBaseWidth / pdfBaseHeight;
 
-    if (totalPages > 0) pageAspect = pageCanvases[0].width / pageCanvases[0].height;
+    // Build thumbnails at low res (fast, low memory)
+    loadText.textContent = 'Building thumbnails…';
+    const THUMB_SCALE = 0.5;
+    for (let p = 1; p <= totalPages; p++) {
+      loadProgress.textContent = `${p} / ${totalPages}`;
+      const page = await pdfDoc.getPage(p);
+      const vp = page.getViewport({ scale: THUMB_SCALE });
+      const c = document.createElement('canvas');
+      c.width = vp.width;
+      c.height = vp.height;
+      const ctx = c.getContext('2d');
+      await page.render({ canvasContext: ctx, viewport: vp }).promise;
+      thumbCanvases.push(c);
+    }
 
     buildThumbnails();
     sizeBook();
 
-    // Start at requested page
     if (isMobileMode) {
       currentSpread = Math.max(0, Math.min(startPage - 1, totalPages - 1));
     } else {
       currentSpread = Math.max(0, Math.floor((startPage - 1) / 2));
     }
-    showSpread(currentSpread);
+    await showSpread(currentSpread);
     loader.classList.remove('active');
+
+    // Pre-cache adjacent pages in background
+    prefetchAround(currentSpread);
 
   } catch (e) {
     loadText.textContent = 'Failed to load PDF';
     loadProgress.textContent = e.message || String(e);
+  }
+
+  /** Pre-render nearby pages so flipping is instant */
+  async function prefetchAround(spreadIdx) {
+    const pages = [];
+    if (isMobileMode) {
+      for (let d = -1; d <= 2; d++) {
+        const p = spreadIdx + d;
+        if (p >= 0 && p < totalPages) pages.push(p);
+      }
+    } else {
+      for (let d = -1; d <= 1; d++) {
+        const s = spreadIdx + d;
+        if (s >= 0 && s <= maxSpread()) {
+          pages.push(s * 2);
+          if (s * 2 + 1 < totalPages) pages.push(s * 2 + 1);
+        }
+      }
+    }
+    const scale = currentDisplayScale();
+    for (const p of pages) {
+      if (!renderCache.has(p) || Math.abs(renderCache.get(p).scale - scale) > 0.5) {
+        renderPageAtScale(p, scale).catch(() => {});
+      }
+    }
+  }
+
+  function currentDisplayScale() {
+    const header = document.querySelector('.header');
+    const isFS = document.body.classList.contains('fullscreen-active');
+    const headerH = isFS ? 0 : header.offsetHeight;
+    const sideNavW = window.innerWidth <= 700 ? 32 : 48;
+    const availH = window.innerHeight - headerH - 16;
+    const dpr = window.devicePixelRatio || 1;
+    // Each page display is roughly half the book height
+    const pageDisplayH = availH;
+    const targetPx = pageDisplayH * dpr;
+    const scale = targetPx / pdfBaseHeight;
+    return Math.max(isMobile ? 2 : 3, scale);
   }
 
   // ── Sizing ──
@@ -542,6 +643,8 @@
   window.addEventListener('resize', () => {
     const modeChanged = checkMobileMode();
     sizeBook();
+    // Invalidate cache on resize — display scale changed
+    renderCache.clear();
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
       if (totalPages > 0) {
@@ -581,11 +684,12 @@
     return c;
   }
 
-  function renderPageToContainer(container, idx) {
+  async function renderPageToContainer(container, idx) {
     container.innerHTML = '';
     if (idx < totalPages) {
       container.style.background = 'none';
-      const src = pageCanvases[idx];
+      const scale = currentDisplayScale();
+      const src = await renderPageAtScale(idx, scale);
       const cw = container.clientWidth || 1;
       const ch = container.clientHeight || 1;
       const c = makeDisplayCanvas(src, cw, ch);
@@ -600,17 +704,41 @@
     }
   }
 
-  function showSpread(spreadIdx) {
+  /** Sync version using cache — for flip animation faces (must be instant) */
+  function renderPageToContainerSync(container, idx) {
+    container.innerHTML = '';
+    if (idx < totalPages) {
+      container.style.background = 'none';
+      const cached = renderCache.get(idx);
+      const src = cached ? cached.canvas : thumbCanvases[idx]; // fallback to thumb
+      const cw = container.clientWidth || 1;
+      const ch = container.clientHeight || 1;
+      const c = makeDisplayCanvas(src, cw, ch);
+      container.appendChild(c);
+      const pn = document.createElement('div');
+      pn.className = 'page-num';
+      pn.textContent = idx + 1;
+      container.appendChild(pn);
+    } else {
+      container.style.background = '#fafafa';
+      container.innerHTML = '<div class="empty-page"></div>';
+    }
+  }
+
+  async function showSpread(spreadIdx) {
     if (isMobileMode) {
-      renderPageToContainer(displayLeft, spreadIdx);
+      await renderPageToContainer(displayLeft, spreadIdx);
       updateIndicators(spreadIdx);
     } else {
       const leftIdx = spreadIdx * 2;
       const rightIdx = spreadIdx * 2 + 1;
-      renderPageToContainer(displayLeft, leftIdx);
-      renderPageToContainer(displayRight, rightIdx);
+      await Promise.all([
+        renderPageToContainer(displayLeft, leftIdx),
+        renderPageToContainer(displayRight, rightIdx),
+      ]);
       updateIndicators(spreadIdx);
     }
+    prefetchAround(spreadIdx);
   }
 
   function maxSpread() {
@@ -658,9 +786,9 @@
         oldCanvas.style.transform = `translateX(${slideDir * 40}px)`;
         oldCanvas.style.opacity = '0';
       }
-      setTimeout(() => {
+      setTimeout(async () => {
         currentSpread = newSpread;
-        showSpread(currentSpread);
+        await showSpread(currentSpread);
         const newCanvas = displayLeft.querySelector('canvas');
         if (newCanvas) {
           newCanvas.style.transform = `translateX(${-slideDir * 40}px)`;
@@ -699,7 +827,9 @@
     const halfH = displayLeft.clientHeight || 1;
     const clonePage = (idx) => {
       if (idx >= totalPages) return null;
-      return makeDisplayCanvas(pageCanvases[idx], halfW, halfH);
+      const cached = renderCache.get(idx);
+      const src = cached ? cached.canvas : thumbCanvases[idx];
+      return makeDisplayCanvas(src, halfW, halfH);
     };
 
     const newLeftIdx = newSpread * 2;
@@ -713,16 +843,19 @@
       const bc = clonePage(newLeftIdx); if (bc) back.appendChild(bc);
       flipEl.appendChild(front); flipEl.appendChild(back);
       book.appendChild(flipEl);
-      renderPageToContainer(displayRight, newRightIdx);
+      renderPageToContainerSync(displayRight, newRightIdx);
       requestAnimationFrame(() => requestAnimationFrame(() => {
         flipEl.style.transform = 'rotateY(-180deg)';
       }));
-      flipEl.addEventListener('transitionend', () => {
-        renderPageToContainer(displayLeft, newLeftIdx);
+      flipEl.addEventListener('transitionend', async () => {
+        await renderPageToContainer(displayLeft, newLeftIdx);
+        // Also upgrade right side to high-res if it was from cache
+        await renderPageToContainer(displayRight, newRightIdx);
         book.removeChild(flipEl);
         currentSpread = newSpread;
         updateIndicators(currentSpread);
         isAnimating = false;
+        prefetchAround(currentSpread);
       }, { once: true });
     } else {
       flipEl.style.left = '0';
@@ -732,16 +865,18 @@
       const bc = clonePage(newRightIdx); if (bc) back.appendChild(bc);
       flipEl.appendChild(front); flipEl.appendChild(back);
       book.appendChild(flipEl);
-      renderPageToContainer(displayLeft, newLeftIdx);
+      renderPageToContainerSync(displayLeft, newLeftIdx);
       requestAnimationFrame(() => requestAnimationFrame(() => {
         flipEl.style.transform = 'rotateY(180deg)';
       }));
-      flipEl.addEventListener('transitionend', () => {
-        renderPageToContainer(displayRight, newRightIdx);
+      flipEl.addEventListener('transitionend', async () => {
+        await renderPageToContainer(displayRight, newRightIdx);
+        await renderPageToContainer(displayLeft, newLeftIdx);
         book.removeChild(flipEl);
         currentSpread = newSpread;
         updateIndicators(currentSpread);
         isAnimating = false;
+        prefetchAround(currentSpread);
       }, { once: true });
     }
   }
@@ -759,17 +894,17 @@
   // ── Thumbnails ──
   function buildThumbnails() {
     thumbStrip.innerHTML = '';
-    pageCanvases.forEach((pc, i) => {
+    thumbCanvases.forEach((tc, i) => {
       const div = document.createElement('div');
       div.className = 'thumb';
       const c = document.createElement('canvas');
-      const scale = 44 / pc.width;
+      const scale = 44 / tc.width;
       c.width = 44;
-      c.height = pc.height * scale;
+      c.height = tc.height * scale;
       const ctx = c.getContext('2d');
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(pc, 0, 0, c.width, c.height);
+      ctx.drawImage(tc, 0, 0, c.width, c.height);
       div.appendChild(c);
       div.addEventListener('click', () => {
         let target;
@@ -798,11 +933,12 @@
   };
   document.addEventListener('fullscreenchange', () => {
     if (!document.fullscreenElement) document.body.classList.remove('fullscreen-active');
-    requestAnimationFrame(sizeBook);
+    renderCache.clear();
+    requestAnimationFrame(() => { sizeBook(); showSpread(currentSpread); });
   });
   if (isIPhone) document.getElementById('fullscreenBtn').style.display = 'none';
 
-  // ── Zoom modal ──
+  // ── Zoom modal — renders direct from PDF at full resolution ──
   const zoomOverlay = document.getElementById('zoomOverlay');
   const zoomCanvasWrap = document.getElementById('zoomCanvasWrap');
   const zoomLevelEl = document.getElementById('zoomLevel');
@@ -810,10 +946,11 @@
   const zoomPrevBtn = document.getElementById('zoomPrev');
   const zoomNextBtn = document.getElementById('zoomNext');
   let zoomPageIdx = 0;
-  let zoomScale = 1;
+  let zoomScale = 1;   // relative: 1 = fit to viewport
+  let zoomBaseScale = 1; // pdf.js scale that fits viewport
   const ZOOM_STEP = 0.25;
-  const ZOOM_MIN = 0.25;
-  const ZOOM_MAX = 4;
+  const ZOOM_MIN = 0.5;
+  const ZOOM_MAX = 5;
 
   window.openZoom = (side) => {
     if (!totalPages) return;
@@ -826,7 +963,7 @@
       if (zoomPageIdx >= totalPages) zoomPageIdx = leftIdx;
     }
     zoomOverlay.classList.add('active');
-    requestAnimationFrame(() => requestAnimationFrame(renderZoom));
+    requestAnimationFrame(() => requestAnimationFrame(() => renderZoom()));
   };
 
   window.closeZoom = () => {
@@ -834,34 +971,36 @@
     zoomCanvasWrap.innerHTML = '';
   };
 
-  function fitZoomScale() {
-    const src = pageCanvases[zoomPageIdx];
-    if (!src) return 1;
+  function calcZoomBaseScale() {
     const stageEl = document.getElementById('zoomStage');
-    const availW = Math.max(100, stageEl.clientWidth - 40);
+    const availW = Math.max(100, stageEl.clientWidth - 100);
     const availH = Math.max(100, stageEl.clientHeight - 40);
-    return Math.max(ZOOM_MIN, Math.min(availW / src.width, availH / src.height, 1));
+    const fitW = availW / pdfBaseWidth;
+    const fitH = availH / pdfBaseHeight;
+    return Math.min(fitW, fitH);
   }
 
-  function renderZoom() {
+  async function renderZoom() {
     if (zoomPageIdx >= totalPages) return;
-    zoomScale = fitZoomScale();
-    drawZoomCanvas();
+    zoomBaseScale = calcZoomBaseScale();
+    zoomScale = 1;
+    await drawZoomCanvas();
     zoomTitleEl.textContent = `Page ${zoomPageIdx + 1} of ${totalPages}`;
     zoomPrevBtn.disabled = zoomPageIdx <= 0;
     zoomNextBtn.disabled = zoomPageIdx >= totalPages - 1;
   }
 
-  function drawZoomCanvas() {
-    const src = pageCanvases[zoomPageIdx];
-    const w = Math.round(src.width * zoomScale);
-    const h = Math.round(src.height * zoomScale);
+  async function drawZoomCanvas() {
+    const pdfScale = zoomBaseScale * zoomScale;
+    const page = await pdfDoc.getPage(zoomPageIdx + 1);
+    const vp = page.getViewport({ scale: pdfScale });
     const c = document.createElement('canvas');
-    c.width = w; c.height = h;
+    c.width = vp.width;
+    c.height = vp.height;
     const ctx = c.getContext('2d');
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(src, 0, 0, w, h);
+    await page.render({ canvasContext: ctx, viewport: vp }).promise;
     zoomCanvasWrap.innerHTML = '';
     zoomCanvasWrap.appendChild(c);
     zoomLevelEl.textContent = Math.round(zoomScale * 100) + '%';
@@ -869,8 +1008,8 @@
 
   window.zoomIn = () => { zoomScale = Math.min(ZOOM_MAX, zoomScale + ZOOM_STEP); drawZoomCanvas(); };
   window.zoomOut = () => { zoomScale = Math.max(ZOOM_MIN, zoomScale - ZOOM_STEP); drawZoomCanvas(); };
-  window.zoomReset = () => { zoomScale = fitZoomScale(); drawZoomCanvas(); };
-  window.zoomNav = (delta) => {
+  window.zoomReset = () => { zoomScale = 1; drawZoomCanvas(); };
+  window.zoomNav = async (delta) => {
     const next = zoomPageIdx + delta;
     if (next < 0 || next >= totalPages) return;
     zoomPageIdx = next;
@@ -878,15 +1017,15 @@
       const newSpread = Math.floor(zoomPageIdx / 2);
       if (newSpread !== currentSpread) {
         currentSpread = newSpread;
-        showSpread(currentSpread);
+        await showSpread(currentSpread);
       }
     } else {
       if (zoomPageIdx !== currentSpread) {
         currentSpread = zoomPageIdx;
-        showSpread(currentSpread);
+        await showSpread(currentSpread);
       }
     }
-    renderZoom();
+    await renderZoom();
   };
 
   document.getElementById('zoomStage').addEventListener('wheel', (e) => {
@@ -981,8 +1120,7 @@
       if (pinching) { if (e.touches.length < 2) pinching = false; return; }
       if (!tracking) return;
       tracking = false;
-      const fitScale = fitZoomScale();
-      if (zoomScale > fitScale * 1.05) return;
+      if (zoomScale > 1.05) return; // don't swipe-nav when zoomed in
       const t = e.changedTouches[0];
       const dx = t.clientX - sx;
       const dy = t.clientY - sy;
