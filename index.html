@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Amekor Catalog</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #ECEEF5;
+    --surface:   #FFFFFF;
+    --ink:       #1B1F3B;
+    --muted:     #6B7194;
+    --accent:    #D4007A;
+    --accent-lt: #FCE6F3;
+    --border:    #CDD1E3;
+    --radius:    4px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+  }
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Header ── */
+  .header {
+    background: linear-gradient(120deg, #1B1F3B 60%, #8B0050 100%);
+    color: #fff;
+    padding: 10px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    box-shadow: 0 2px 20px rgba(0,0,0,.25);
+    z-index: 10;
+  }
+  .logo {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.3rem;
+    font-weight: 300;
+    letter-spacing: .12em;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .logo span { font-weight: 600; }
+  .header-actions { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+
+  .btn {
+    font-family: 'DM Sans', sans-serif;
+    font-size: .72rem;
+    font-weight: 500;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    padding: 6px 12px;
+    border-radius: var(--radius);
+    border: 1px solid rgba(255,255,255,.35);
+    background: transparent;
+    color: #fff;
+    cursor: pointer;
+    transition: all .18s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .btn:hover { background: rgba(255,255,255,.12); border-color: #fff; }
+  .btn-icon { padding: 6px 8px; font-size: .9rem; line-height: 1; }
+
+  /* ── Stage ── */
+  .stage {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  /* ── Reader layout ── */
+  .reader-layout {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .side-nav {
+    flex-shrink: 0;
+    width: 48px;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .side-nav-btn {
+    width: 40px; height: 72px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--muted);
+    font-size: 20px;
+    cursor: pointer;
+    transition: all .2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .side-nav-btn:hover:not(:disabled) {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-lt);
+  }
+  .side-nav-btn:disabled { opacity: 0.25; cursor: default; }
+
+  .book-area {
+    flex: 1;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 0;
+    perspective: 2000px;
+    position: relative;
+  }
+  .book {
+    position: relative;
+    transform-style: preserve-3d;
+    transform: rotateX(1deg);
+  }
+  .display-left, .display-right {
+    position: absolute;
+    top: 0; width: 50%; height: 100%;
+    background: #fff;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+  .display-left {
+    left: 0; border-radius: var(--radius) 0 0 var(--radius);
+    box-shadow: inset 4px 0 12px rgba(0,0,0,0.06), -4px 2px 16px rgba(27,31,59,.18);
+  }
+  .display-right {
+    left: 50%; border-radius: 0 var(--radius) var(--radius) 0;
+    box-shadow: inset -4px 0 12px rgba(0,0,0,0.06), 4px 2px 16px rgba(27,31,59,.18);
+  }
+  .display-left canvas, .display-right canvas { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+  .click-zone.zoom-target { cursor: zoom-in; }
+
+  /* ── Spine shadow ── */
+  .book::before {
+    content: '';
+    position: absolute; left: 50%; top: 0;
+    width: 6px; height: 100%; transform: translateX(-50%);
+    background: linear-gradient(90deg, rgba(0,0,0,0.25) 0%, rgba(255,255,255,0.08) 50%, rgba(0,0,0,0.25) 100%);
+    z-index: 100; pointer-events: none;
+  }
+  .book::after {
+    content: '';
+    position: absolute; bottom: -14px; left: 8%; width: 84%; height: 14px;
+    background: radial-gradient(ellipse, rgba(27,31,59,0.35) 0%, transparent 70%);
+    filter: blur(6px); z-index: -1;
+  }
+
+  .page-num {
+    position: absolute; bottom: 8px;
+    font-size: 10px; color: #999;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .display-left .page-num { left: 12px; }
+  .display-right .page-num { right: 12px; }
+
+  .click-zone {
+    position: absolute; top: 0; width: 50%; height: 100%;
+    cursor: pointer; z-index: 50;
+  }
+  .click-zone.left { left: 0; }
+  .click-zone.right { left: 50%; }
+
+  .page-indicator {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: .72rem;
+    color: #fff;
+    background: rgba(27,31,59,0.85);
+    padding: 5px 18px;
+    border-radius: 20px;
+    letter-spacing: .1em;
+    z-index: 110;
+    pointer-events: none;
+  }
+  .page-indicator strong { color: #FCE6F3; font-weight: 600; }
+
+  /* ── Zoom modal ── */
+  .zoom-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(10,12,24,0.94);
+    display: none; z-index: 500;
+    flex-direction: column;
+  }
+  .zoom-overlay.active { display: flex; }
+  .zoom-header {
+    flex-shrink: 0;
+    padding: 10px 20px;
+    background: rgba(27,31,59,0.95);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    justify-content: space-between;
+    box-shadow: 0 2px 12px rgba(0,0,0,.4);
+  }
+  .zoom-title { font-family: 'Cormorant Garamond', serif; font-size: 1.1rem; letter-spacing: .08em; }
+  .zoom-controls { display: flex; gap: 8px; align-items: center; }
+  .zoom-btn {
+    background: rgba(255,255,255,.08);
+    border: 1px solid rgba(255,255,255,.25);
+    color: #fff;
+    width: 36px; height: 36px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1rem;
+    display: flex; align-items: center; justify-content: center;
+    transition: all .15s ease;
+  }
+  .zoom-btn:hover { background: rgba(255,255,255,.18); border-color: var(--accent); }
+  .zoom-level { color: #fff; font-size: .8rem; min-width: 48px; text-align: center; letter-spacing: .05em; }
+  .zoom-stage {
+    flex: 1;
+    overflow: auto;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 20px;
+    background:
+      radial-gradient(ellipse at center, rgba(212,0,122,0.04) 0%, transparent 60%),
+      #0a0c18;
+  }
+  .zoom-canvas-wrap {
+    display: inline-block;
+    background: #fff;
+    box-shadow: 0 8px 40px rgba(0,0,0,.5);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .zoom-canvas-wrap canvas { display: block; }
+  .zoom-nav {
+    position: absolute;
+    top: 50%; transform: translateY(-50%);
+    background: rgba(27,31,59,0.7);
+    border: 1px solid rgba(255,255,255,.25);
+    color: #fff;
+    width: 44px; height: 80px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 22px;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 510;
+  }
+  .zoom-nav:hover:not(:disabled) { background: rgba(212,0,122,0.6); }
+  .zoom-nav:disabled { opacity: .2; cursor: default; }
+  .zoom-nav.prev { left: 14px; }
+  .zoom-nav.next { right: 14px; }
+
+  /* ── Thumbnail strip ── */
+  .thumb-strip {
+    position: absolute; bottom: 0; left: 48px; right: 48px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 10px 16px; display: none; gap: 6px;
+    overflow-x: auto; z-index: 20;
+    box-shadow: 0 -4px 12px rgba(27,31,59,.06);
+  }
+  .thumb-strip.visible { display: flex; }
+  .thumb {
+    flex-shrink: 0; width: 44px; height: 58px;
+    border: 2px solid transparent; border-radius: 3px;
+    overflow: hidden; cursor: pointer; opacity: 0.5;
+    transition: all .2s ease; background: #fff;
+  }
+  .thumb:hover { opacity: 0.85; }
+  .thumb.active { border-color: var(--accent); opacity: 1; box-shadow: 0 0 8px rgba(212,0,122,.25); }
+  .thumb canvas { width: 100%; height: 100%; object-fit: cover; }
+
+  /* ── Loading ── */
+  .loading-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(236,238,245,0.94);
+    display: none; align-items: center; justify-content: center;
+    flex-direction: column; gap: 18px; z-index: 200;
+  }
+  .loading-overlay.active { display: flex; }
+  .spinner {
+    width: 44px; height: 44px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text { font-size: .8rem; color: var(--ink); letter-spacing: .12em; text-transform: uppercase; font-weight: 500; }
+  .loading-progress { font-size: .72rem; color: var(--muted); }
+
+  .empty-page {
+    display: flex; align-items: center; justify-content: center;
+    width: 100%; height: 100%; color: #ccc; font-size: 13px;
+    background: #fafafa;
+  }
+
+  .fullscreen-active .header { display: none; }
+
+  /* ── Mobile single-page mode ── */
+  .mobile-mode .book { transform: none; }
+  .mobile-mode .book::before { display: none; }
+  .mobile-mode .display-left {
+    width: 100%;
+    border-radius: var(--radius);
+    box-shadow: 0 4px 20px rgba(27,31,59,.18);
+  }
+  .mobile-mode .display-right { display: none; }
+  .mobile-mode .click-zone.left { width: 50%; }
+  .mobile-mode .click-zone.right { left: 50%; width: 50%; }
+
+  @media (max-width: 700px) {
+    .side-nav { width: 32px; }
+    .side-nav-btn { width: 28px; height: 52px; font-size: 16px; }
+    .header { padding: 8px 12px; }
+    .logo { font-size: 1rem; }
+    .thumb-strip { left: 32px; right: 32px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo" id="catalogTitle">AMEKOR <span>CATALOG</span></div>
+  <div class="header-actions">
+    <button class="btn btn-icon" id="thumbToggle" onclick="toggleThumbs()" title="Thumbnails">&#9783;</button>
+    <button class="btn btn-icon" id="fullscreenBtn" onclick="toggleFullscreen()" title="Fullscreen">&#9974;</button>
+  </div>
+</div>
+
+<div class="stage" id="stage">
+  <div class="reader-layout" id="readerLayout">
+    <div class="side-nav">
+      <button class="side-nav-btn" id="prevBtn" onclick="prevPage()">&#8249;</button>
+    </div>
+    <div class="book-area">
+      <div class="book" id="book">
+        <div class="display-left" id="displayLeft"><div class="empty-page"></div></div>
+        <div class="display-right" id="displayRight"><div class="empty-page"></div></div>
+        <div class="click-zone left zoom-target" onclick="openZoom('left')"></div>
+        <div class="click-zone right zoom-target" onclick="openZoom('right')"></div>
+        <div class="page-indicator" id="pageIndicator"></div>
+      </div>
+    </div>
+
+    <!-- Zoom modal -->
+    <div class="zoom-overlay" id="zoomOverlay">
+      <div class="zoom-header">
+        <div class="zoom-title" id="zoomTitle">Page 1</div>
+        <div class="zoom-controls">
+          <button class="zoom-btn" onclick="zoomOut()" title="Zoom out">&minus;</button>
+          <span class="zoom-level" id="zoomLevel">100%</span>
+          <button class="zoom-btn" onclick="zoomIn()" title="Zoom in">+</button>
+          <button class="zoom-btn" onclick="zoomReset()" title="Reset">&#10226;</button>
+          <button class="zoom-btn" onclick="closeZoom()" title="Close" style="background:rgba(212,0,122,.3);border-color:var(--accent);">&#10005;</button>
+        </div>
+      </div>
+      <div class="zoom-stage" id="zoomStage">
+        <button class="zoom-nav prev" id="zoomPrev" onclick="zoomNav(-1)">&#8249;</button>
+        <div class="zoom-canvas-wrap" id="zoomCanvasWrap"></div>
+        <button class="zoom-nav next" id="zoomNext" onclick="zoomNav(1)">&#8250;</button>
+      </div>
+    </div>
+
+    <div class="side-nav">
+      <button class="side-nav-btn" id="nextBtn" onclick="nextPage()">&#8250;</button>
+    </div>
+  </div>
+
+  <div class="thumb-strip" id="thumbStrip"></div>
+
+  <div class="loading-overlay active" id="loader">
+    <div class="spinner"></div>
+    <div class="loading-text" id="loadText">Loading catalog&hellip;</div>
+    <div class="loading-progress" id="loadProgress"></div>
+  </div>
+</div>
+
+<script type="module">
+  // ── Config from query params ──
+  const params = new URLSearchParams(window.location.search);
+  const pdfUrl = params.get('pdf');
+  const catalogTitle = params.get('title') || 'Catalog';
+  const startPage = parseInt(params.get('page') || '1', 10);
+
+  document.getElementById('catalogTitle').innerHTML =
+    'AMEKOR <span>' + catalogTitle.toUpperCase().replace(/[<>"'&]/g, '') + '</span>';
+  document.title = 'Amekor ' + catalogTitle;
+
+  if (!pdfUrl) {
+    document.getElementById('loadText').textContent = 'No PDF specified';
+    document.getElementById('loadProgress').textContent = 'Add ?pdf=URL&title=Name to the embed URL';
+    throw new Error('No pdf param');
+  }
+
+  // ── PDF.js setup ──
+  const pdfjsLib = await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs');
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs';
+
+  // ── State ──
+  let pdfDoc = null;
+  let pageCanvases = [];
+  let pageAspect = 1;
+  let currentSpread = 0;
+  let totalPages = 0;
+  let isAnimating = false;
+  let isMobileMode = false;
+
+  const UA = navigator.userAgent;
+  const isIPhone = /iPhone/.test(UA);
+  const isIPad = /iPad/.test(UA) || (/Macintosh/.test(UA) && navigator.maxTouchPoints > 1);
+  const isAndroidPhone = /Android/.test(UA) && /Mobile/.test(UA);
+  const isMobile = isIPhone || isAndroidPhone || (window.innerWidth < 768 && 'ontouchstart' in window);
+  const isTablet = isIPad || (/Android/.test(UA) && !/Mobile/.test(UA));
+  const RENDER_SCALE = isMobile ? 2 : (isTablet ? 3 : 4);
+
+  const stage = document.getElementById('stage');
+  const book = document.getElementById('book');
+  const displayLeft = document.getElementById('displayLeft');
+  const displayRight = document.getElementById('displayRight');
+  const pageIndicator = document.getElementById('pageIndicator');
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const loader = document.getElementById('loader');
+  const loadText = document.getElementById('loadText');
+  const loadProgress = document.getElementById('loadProgress');
+  const thumbStrip = document.getElementById('thumbStrip');
+
+  // ── Detect mobile → single page mode ──
+  function checkMobileMode() {
+    const wasMobile = isMobileMode;
+    isMobileMode = window.innerWidth < 700;
+    if (isMobileMode) {
+      stage.classList.add('mobile-mode');
+    } else {
+      stage.classList.remove('mobile-mode');
+    }
+    return wasMobile !== isMobileMode;
+  }
+  checkMobileMode();
+
+  // ── Load PDF ──
+  try {
+    loadText.textContent = 'Fetching PDF…';
+    pdfDoc = await pdfjsLib.getDocument({ url: pdfUrl }).promise;
+    totalPages = pdfDoc.numPages;
+
+    loadText.textContent = 'Rendering pages…';
+    for (let p = 1; p <= totalPages; p++) {
+      loadProgress.textContent = `Page ${p} / ${totalPages}`;
+      const page = await pdfDoc.getPage(p);
+      const vp = page.getViewport({ scale: RENDER_SCALE });
+      const canvas = document.createElement('canvas');
+      canvas.width = vp.width;
+      canvas.height = vp.height;
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      await page.render({ canvasContext: ctx, viewport: vp }).promise;
+      pageCanvases.push(canvas);
+    }
+
+    if (totalPages > 0) pageAspect = pageCanvases[0].width / pageCanvases[0].height;
+
+    buildThumbnails();
+    sizeBook();
+
+    // Start at requested page
+    if (isMobileMode) {
+      currentSpread = Math.max(0, Math.min(startPage - 1, totalPages - 1));
+    } else {
+      currentSpread = Math.max(0, Math.floor((startPage - 1) / 2));
+    }
+    showSpread(currentSpread);
+    loader.classList.remove('active');
+
+  } catch (e) {
+    loadText.textContent = 'Failed to load PDF';
+    loadProgress.textContent = e.message || String(e);
+  }
+
+  // ── Sizing ──
+  function sizeBook() {
+    if (totalPages === 0) return;
+    const header = document.querySelector('.header');
+    const isFS = document.body.classList.contains('fullscreen-active');
+    const headerH = isFS ? 0 : header.offsetHeight;
+    const sideNavW = window.innerWidth <= 700 ? 32 : 48;
+    const availW = window.innerWidth - sideNavW * 2 - 16;
+    const availH = window.innerHeight - headerH - 16;
+
+    let bookW, bookH;
+    if (isMobileMode) {
+      const singleAspect = pageAspect;
+      if (availW / availH > singleAspect) {
+        bookH = availH;
+        bookW = bookH * singleAspect;
+      } else {
+        bookW = availW;
+        bookH = bookW / singleAspect;
+      }
+    } else {
+      const spreadAspect = 2 * pageAspect;
+      if (availW / availH > spreadAspect) {
+        bookH = availH;
+        bookW = bookH * spreadAspect;
+      } else {
+        bookW = availW;
+        bookH = bookW / spreadAspect;
+      }
+    }
+    book.style.width = bookW + 'px';
+    book.style.height = bookH + 'px';
+  }
+
+  let resizeTimer;
+  window.addEventListener('resize', () => {
+    const modeChanged = checkMobileMode();
+    sizeBook();
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      if (totalPages > 0) {
+        if (modeChanged) {
+          if (isMobileMode) {
+            currentSpread = currentSpread * 2;
+          } else {
+            currentSpread = Math.floor(currentSpread / 2);
+          }
+        }
+        showSpread(currentSpread);
+      }
+    }, 150);
+  });
+
+  // ── Display helpers ──
+  function makeDisplayCanvas(src, cw, ch) {
+    const dpr = window.devicePixelRatio || 1;
+    const srcAspect = src.width / src.height;
+    const contAspect = cw / ch;
+    let dw, dh;
+    if (contAspect > srcAspect) {
+      dh = ch; dw = dh * srcAspect;
+    } else {
+      dw = cw; dh = dw / srcAspect;
+    }
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(dw * dpr));
+    c.height = Math.max(1, Math.round(dh * dpr));
+    const ctx = c.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(src, 0, 0, c.width, c.height);
+    c.style.width = dw + 'px';
+    c.style.height = dh + 'px';
+    c.style.display = 'block';
+    return c;
+  }
+
+  function renderPageToContainer(container, idx) {
+    container.innerHTML = '';
+    if (idx < totalPages) {
+      container.style.background = 'none';
+      const src = pageCanvases[idx];
+      const cw = container.clientWidth || 1;
+      const ch = container.clientHeight || 1;
+      const c = makeDisplayCanvas(src, cw, ch);
+      container.appendChild(c);
+      const pn = document.createElement('div');
+      pn.className = 'page-num';
+      pn.textContent = idx + 1;
+      container.appendChild(pn);
+    } else {
+      container.style.background = '#fafafa';
+      container.innerHTML = '<div class="empty-page"></div>';
+    }
+  }
+
+  function showSpread(spreadIdx) {
+    if (isMobileMode) {
+      renderPageToContainer(displayLeft, spreadIdx);
+      updateIndicators(spreadIdx);
+    } else {
+      const leftIdx = spreadIdx * 2;
+      const rightIdx = spreadIdx * 2 + 1;
+      renderPageToContainer(displayLeft, leftIdx);
+      renderPageToContainer(displayRight, rightIdx);
+      updateIndicators(spreadIdx);
+    }
+  }
+
+  function maxSpread() {
+    if (isMobileMode) return totalPages - 1;
+    return Math.ceil(totalPages / 2) - 1;
+  }
+
+  function updateIndicators(spreadIdx) {
+    if (isMobileMode) {
+      pageIndicator.innerHTML = `<strong>${spreadIdx + 1}</strong> of ${totalPages}`;
+    } else {
+      const leftIdx = spreadIdx * 2;
+      const rightIdx = spreadIdx * 2 + 1;
+      const l = leftIdx + 1;
+      const r = Math.min(rightIdx + 1, totalPages);
+      pageIndicator.innerHTML = l === r || rightIdx >= totalPages
+        ? `<strong>${l}</strong> of ${totalPages}`
+        : `<strong>${l}</strong> &ndash; <strong>${r}</strong> of ${totalPages}`;
+    }
+    prevBtn.disabled = spreadIdx <= 0;
+    nextBtn.disabled = spreadIdx >= maxSpread();
+
+    document.querySelectorAll('.thumb').forEach((t, i) => {
+      if (isMobileMode) {
+        t.classList.toggle('active', i === spreadIdx);
+      } else {
+        t.classList.toggle('active', i === spreadIdx * 2 || i === spreadIdx * 2 + 1);
+      }
+    });
+    const at = thumbStrip.querySelector('.thumb.active');
+    if (at) at.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }
+
+  // ── Page flip animation (desktop spread mode) ──
+  function flipTo(newSpread, direction) {
+    if (isAnimating) return;
+    if (newSpread < 0 || newSpread > maxSpread()) return;
+
+    if (isMobileMode) {
+      isAnimating = true;
+      const slideDir = direction === 'next' ? -1 : 1;
+      const oldCanvas = displayLeft.querySelector('canvas');
+      if (oldCanvas) {
+        oldCanvas.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+        oldCanvas.style.transform = `translateX(${slideDir * 40}px)`;
+        oldCanvas.style.opacity = '0';
+      }
+      setTimeout(() => {
+        currentSpread = newSpread;
+        showSpread(currentSpread);
+        const newCanvas = displayLeft.querySelector('canvas');
+        if (newCanvas) {
+          newCanvas.style.transform = `translateX(${-slideDir * 40}px)`;
+          newCanvas.style.opacity = '0';
+          requestAnimationFrame(() => {
+            newCanvas.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+            newCanvas.style.transform = 'translateX(0)';
+            newCanvas.style.opacity = '1';
+          });
+        }
+        setTimeout(() => { isAnimating = false; }, 320);
+      }, 200);
+      return;
+    }
+
+    isAnimating = true;
+    const flipEl = document.createElement('div');
+    Object.assign(flipEl.style, {
+      position: 'absolute', top: '0', width: '50%', height: '100%',
+      zIndex: '100', transformStyle: 'preserve-3d',
+      transition: 'transform 0.65s cubic-bezier(0.645, 0.045, 0.355, 1.000)',
+    });
+
+    const makeFace = (isBack) => {
+      const face = document.createElement('div');
+      Object.assign(face.style, {
+        position: 'absolute', top: '0', left: '0', width: '100%', height: '100%',
+        backfaceVisibility: 'hidden', background: '#fff',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+      });
+      if (isBack) face.style.transform = 'rotateY(180deg)';
+      return face;
+    };
+
+    const halfW = displayLeft.clientWidth || 1;
+    const halfH = displayLeft.clientHeight || 1;
+    const clonePage = (idx) => {
+      if (idx >= totalPages) return null;
+      return makeDisplayCanvas(pageCanvases[idx], halfW, halfH);
+    };
+
+    const newLeftIdx = newSpread * 2;
+    const newRightIdx = newSpread * 2 + 1;
+
+    if (direction === 'next') {
+      flipEl.style.left = '50%';
+      flipEl.style.transformOrigin = 'left center';
+      const front = makeFace(false), back = makeFace(true);
+      const fc = clonePage(currentSpread * 2 + 1); if (fc) front.appendChild(fc);
+      const bc = clonePage(newLeftIdx); if (bc) back.appendChild(bc);
+      flipEl.appendChild(front); flipEl.appendChild(back);
+      book.appendChild(flipEl);
+      renderPageToContainer(displayRight, newRightIdx);
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        flipEl.style.transform = 'rotateY(-180deg)';
+      }));
+      flipEl.addEventListener('transitionend', () => {
+        renderPageToContainer(displayLeft, newLeftIdx);
+        book.removeChild(flipEl);
+        currentSpread = newSpread;
+        updateIndicators(currentSpread);
+        isAnimating = false;
+      }, { once: true });
+    } else {
+      flipEl.style.left = '0';
+      flipEl.style.transformOrigin = 'right center';
+      const front = makeFace(false), back = makeFace(true);
+      const fc = clonePage(currentSpread * 2); if (fc) front.appendChild(fc);
+      const bc = clonePage(newRightIdx); if (bc) back.appendChild(bc);
+      flipEl.appendChild(front); flipEl.appendChild(back);
+      book.appendChild(flipEl);
+      renderPageToContainer(displayLeft, newLeftIdx);
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        flipEl.style.transform = 'rotateY(180deg)';
+      }));
+      flipEl.addEventListener('transitionend', () => {
+        renderPageToContainer(displayRight, newRightIdx);
+        book.removeChild(flipEl);
+        currentSpread = newSpread;
+        updateIndicators(currentSpread);
+        isAnimating = false;
+      }, { once: true });
+    }
+  }
+
+  window.nextPage = () => flipTo(currentSpread + 1, 'next');
+  window.prevPage = () => flipTo(currentSpread - 1, 'prev');
+
+  // ── Keyboard ──
+  document.addEventListener('keydown', (e) => {
+    if (document.getElementById('zoomOverlay').classList.contains('active')) return;
+    if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); window.nextPage(); }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); window.prevPage(); }
+  });
+
+  // ── Thumbnails ──
+  function buildThumbnails() {
+    thumbStrip.innerHTML = '';
+    pageCanvases.forEach((pc, i) => {
+      const div = document.createElement('div');
+      div.className = 'thumb';
+      const c = document.createElement('canvas');
+      const scale = 44 / pc.width;
+      c.width = 44;
+      c.height = pc.height * scale;
+      const ctx = c.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(pc, 0, 0, c.width, c.height);
+      div.appendChild(c);
+      div.addEventListener('click', () => {
+        let target;
+        if (isMobileMode) {
+          target = i;
+        } else {
+          target = Math.floor(i / 2);
+        }
+        if (target !== currentSpread) flipTo(target, target > currentSpread ? 'next' : 'prev');
+      });
+      thumbStrip.appendChild(div);
+    });
+  }
+
+  window.toggleThumbs = () => thumbStrip.classList.toggle('visible');
+
+  // ── Fullscreen ──
+  window.toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+      document.body.classList.add('fullscreen-active');
+    } else {
+      document.exitFullscreen();
+      document.body.classList.remove('fullscreen-active');
+    }
+  };
+  document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement) document.body.classList.remove('fullscreen-active');
+    requestAnimationFrame(sizeBook);
+  });
+  if (isIPhone) document.getElementById('fullscreenBtn').style.display = 'none';
+
+  // ── Zoom modal ──
+  const zoomOverlay = document.getElementById('zoomOverlay');
+  const zoomCanvasWrap = document.getElementById('zoomCanvasWrap');
+  const zoomLevelEl = document.getElementById('zoomLevel');
+  const zoomTitleEl = document.getElementById('zoomTitle');
+  const zoomPrevBtn = document.getElementById('zoomPrev');
+  const zoomNextBtn = document.getElementById('zoomNext');
+  let zoomPageIdx = 0;
+  let zoomScale = 1;
+  const ZOOM_STEP = 0.25;
+  const ZOOM_MIN = 0.25;
+  const ZOOM_MAX = 4;
+
+  window.openZoom = (side) => {
+    if (!totalPages) return;
+    if (isMobileMode) {
+      zoomPageIdx = currentSpread;
+    } else {
+      const leftIdx = currentSpread * 2;
+      const rightIdx = currentSpread * 2 + 1;
+      zoomPageIdx = side === 'left' ? leftIdx : rightIdx;
+      if (zoomPageIdx >= totalPages) zoomPageIdx = leftIdx;
+    }
+    zoomOverlay.classList.add('active');
+    requestAnimationFrame(() => requestAnimationFrame(renderZoom));
+  };
+
+  window.closeZoom = () => {
+    zoomOverlay.classList.remove('active');
+    zoomCanvasWrap.innerHTML = '';
+  };
+
+  function fitZoomScale() {
+    const src = pageCanvases[zoomPageIdx];
+    if (!src) return 1;
+    const stageEl = document.getElementById('zoomStage');
+    const availW = Math.max(100, stageEl.clientWidth - 40);
+    const availH = Math.max(100, stageEl.clientHeight - 40);
+    return Math.max(ZOOM_MIN, Math.min(availW / src.width, availH / src.height, 1));
+  }
+
+  function renderZoom() {
+    if (zoomPageIdx >= totalPages) return;
+    zoomScale = fitZoomScale();
+    drawZoomCanvas();
+    zoomTitleEl.textContent = `Page ${zoomPageIdx + 1} of ${totalPages}`;
+    zoomPrevBtn.disabled = zoomPageIdx <= 0;
+    zoomNextBtn.disabled = zoomPageIdx >= totalPages - 1;
+  }
+
+  function drawZoomCanvas() {
+    const src = pageCanvases[zoomPageIdx];
+    const w = Math.round(src.width * zoomScale);
+    const h = Math.round(src.height * zoomScale);
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const ctx = c.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(src, 0, 0, w, h);
+    zoomCanvasWrap.innerHTML = '';
+    zoomCanvasWrap.appendChild(c);
+    zoomLevelEl.textContent = Math.round(zoomScale * 100) + '%';
+  }
+
+  window.zoomIn = () => { zoomScale = Math.min(ZOOM_MAX, zoomScale + ZOOM_STEP); drawZoomCanvas(); };
+  window.zoomOut = () => { zoomScale = Math.max(ZOOM_MIN, zoomScale - ZOOM_STEP); drawZoomCanvas(); };
+  window.zoomReset = () => { zoomScale = fitZoomScale(); drawZoomCanvas(); };
+  window.zoomNav = (delta) => {
+    const next = zoomPageIdx + delta;
+    if (next < 0 || next >= totalPages) return;
+    zoomPageIdx = next;
+    if (!isMobileMode) {
+      const newSpread = Math.floor(zoomPageIdx / 2);
+      if (newSpread !== currentSpread) {
+        currentSpread = newSpread;
+        showSpread(currentSpread);
+      }
+    } else {
+      if (zoomPageIdx !== currentSpread) {
+        currentSpread = zoomPageIdx;
+        showSpread(currentSpread);
+      }
+    }
+    renderZoom();
+  };
+
+  document.getElementById('zoomStage').addEventListener('wheel', (e) => {
+    if (!zoomOverlay.classList.contains('active')) return;
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      if (e.deltaY < 0) window.zoomIn(); else window.zoomOut();
+    }
+  }, { passive: false });
+
+  document.addEventListener('keydown', (e) => {
+    if (!zoomOverlay.classList.contains('active')) return;
+    if (e.key === 'Escape') { e.preventDefault(); window.closeZoom(); }
+    else if (e.key === '+' || e.key === '=') { e.preventDefault(); window.zoomIn(); }
+    else if (e.key === '-') { e.preventDefault(); window.zoomOut(); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); window.zoomNav(1); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); window.zoomNav(-1); }
+  });
+
+  document.getElementById('zoomStage').addEventListener('click', (e) => {
+    if (e.target.id === 'zoomStage') window.closeZoom();
+  });
+
+  // ── Touch: swipe on book ──
+  (function setupSwipe() {
+    let sx = 0, sy = 0, st = 0, tracking = false;
+    const SWIPE_MIN_X = 50;
+    const SWIPE_MAX_Y = 80;
+    const SWIPE_MAX_T = 600;
+    const SWIPE_TAP_MAX = 10;
+
+    book.addEventListener('touchstart', (e) => {
+      if (e.touches.length !== 1) { tracking = false; return; }
+      const t = e.touches[0];
+      sx = t.clientX; sy = t.clientY; st = Date.now();
+      tracking = true;
+    }, { passive: true });
+
+    book.addEventListener('touchend', (e) => {
+      if (!tracking) return;
+      tracking = false;
+      const t = e.changedTouches[0];
+      const dx = t.clientX - sx;
+      const dy = t.clientY - sy;
+      const dt = Date.now() - st;
+      const absX = Math.abs(dx), absY = Math.abs(dy);
+      if (absX < SWIPE_TAP_MAX && absY < SWIPE_TAP_MAX) return;
+      if (dt < SWIPE_MAX_T && absX > SWIPE_MIN_X && absY < SWIPE_MAX_Y) {
+        e.preventDefault();
+        if (dx < 0) window.nextPage(); else window.prevPage();
+      }
+    }, { passive: false });
+  })();
+
+  // ── Touch: swipe + pinch in zoom ──
+  (function setupZoomTouch() {
+    const stageEl = document.getElementById('zoomStage');
+    let pinchStartDist = 0, pinchStartScale = 1, pinching = false;
+    let sx = 0, sy = 0, st = 0, tracking = false;
+    const SWIPE_MIN_X = 60;
+    const SWIPE_MAX_Y = 80;
+    const SWIPE_MAX_T = 600;
+
+    const dist = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+
+    stageEl.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 2) {
+        pinching = true; tracking = false;
+        pinchStartDist = dist(e.touches[0], e.touches[1]);
+        pinchStartScale = zoomScale;
+        e.preventDefault();
+      } else if (e.touches.length === 1) {
+        const t = e.touches[0];
+        sx = t.clientX; sy = t.clientY; st = Date.now();
+        tracking = true; pinching = false;
+      }
+    }, { passive: false });
+
+    stageEl.addEventListener('touchmove', (e) => {
+      if (pinching && e.touches.length === 2) {
+        const d = dist(e.touches[0], e.touches[1]);
+        const newScale = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, pinchStartScale * (d / pinchStartDist)));
+        if (Math.abs(newScale - zoomScale) > 0.02) {
+          zoomScale = newScale;
+          drawZoomCanvas();
+        }
+        e.preventDefault();
+      }
+    }, { passive: false });
+
+    stageEl.addEventListener('touchend', (e) => {
+      if (pinching) { if (e.touches.length < 2) pinching = false; return; }
+      if (!tracking) return;
+      tracking = false;
+      const fitScale = fitZoomScale();
+      if (zoomScale > fitScale * 1.05) return;
+      const t = e.changedTouches[0];
+      const dx = t.clientX - sx;
+      const dy = t.clientY - sy;
+      const dt = Date.now() - st;
+      if (dt < SWIPE_MAX_T && Math.abs(dx) > SWIPE_MIN_X && Math.abs(dy) < SWIPE_MAX_Y) {
+        if (dx < 0) window.zoomNav(1); else window.zoomNav(-1);
+      }
+    });
+  })();
+</script>
+
+</body>
+</html>
