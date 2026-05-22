@@ -755,20 +755,27 @@
 
   window.toggleThumbs = () => thumbStrip.classList.toggle('visible');
 
-  // ── Fullscreen (works on mobile too) ──
+  // ── Fullscreen ──
+  const canFullscreen = !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
+
   window.toggleFullscreen = () => {
-    const el = document.documentElement;
-    const isFS = document.fullscreenElement || document.webkitFullscreenElement;
-    if (!isFS) {
-      const rfs = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
-      if (rfs) {
-        rfs.call(el).catch(() => {});
-        document.body.classList.add('fullscreen-active');
+    if (canFullscreen) {
+      const el = document.documentElement;
+      const isFS = document.fullscreenElement || document.webkitFullscreenElement;
+      if (!isFS) {
+        const rfs = el.requestFullscreen || el.webkitRequestFullscreen;
+        if (rfs) {
+          rfs.call(el).catch(() => {});
+          document.body.classList.add('fullscreen-active');
+        }
+      } else {
+        const efs = document.exitFullscreen || document.webkitExitFullscreen;
+        if (efs) efs.call(document);
+        document.body.classList.remove('fullscreen-active');
       }
     } else {
-      const efs = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
-      if (efs) efs.call(document);
-      document.body.classList.remove('fullscreen-active');
+      // iOS / no fullscreen API — open in new tab at full viewport
+      window.open(window.location.href, '_blank');
     }
   };
   const fsChange = () => {
