@@ -291,7 +291,8 @@
   .printing #printContainer { display: block; }
 
   @media print {
-    html, body { width: 100%; height: auto; overflow: visible; background: #fff; }
+    @page { margin: 0; }
+    html, body { width: 100%; height: 100%; overflow: visible; background: #fff; margin: 0; padding: 0; }
     body * { visibility: hidden; }
     #printContainer, #printContainer * { visibility: visible; }
     #printContainer {
@@ -302,10 +303,14 @@
     }
     .print-page {
       display: block;
-      width: 100%;
+      max-width: 100vw;
+      max-height: 100vh;
+      width: auto;
       height: auto;
+      object-fit: contain;
       page-break-after: always;
       break-after: page;
+      margin: 0 auto;
     }
     .print-page:last-child { page-break-after: avoid; break-after: avoid; }
     .stage, .bottom-controls, .thumb-strip, .page-indicator,
