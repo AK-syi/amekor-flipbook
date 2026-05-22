@@ -25,56 +25,11 @@
   }
   body {
     font-family: 'DM Sans', sans-serif;
-    background: var(--bg);
+    background: transparent;
     color: var(--ink);
     display: flex;
     flex-direction: column;
   }
-
-  /* ── Header ── */
-  .header {
-    background: linear-gradient(120deg, #1B1F3B 60%, #8B0050 100%);
-    color: #fff;
-    padding: 10px 24px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-shrink: 0;
-    box-shadow: 0 2px 20px rgba(0,0,0,.25);
-    z-index: 10;
-  }
-  .logo {
-    font-family: 'Cormorant Garamond', serif;
-    font-size: 1.3rem;
-    font-weight: 300;
-    letter-spacing: .12em;
-    color: #fff;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .logo span { font-weight: 600; }
-  .header-actions { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
-
-  .btn {
-    font-family: 'DM Sans', sans-serif;
-    font-size: .72rem;
-    font-weight: 500;
-    letter-spacing: .08em;
-    text-transform: uppercase;
-    padding: 6px 12px;
-    border-radius: var(--radius);
-    border: 1px solid rgba(255,255,255,.35);
-    background: transparent;
-    color: #fff;
-    cursor: pointer;
-    transition: all .18s ease;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-  }
-  .btn:hover { background: rgba(255,255,255,.12); border-color: #fff; }
-  .btn-icon { padding: 6px 8px; font-size: .9rem; line-height: 1; }
 
   /* ── Stage ── */
   .stage {
@@ -84,7 +39,40 @@
     justify-content: center;
     position: relative;
     overflow: hidden;
-    background: var(--bg);
+    background: transparent;
+  }
+
+  /* ── Bottom controls bar ── */
+  .bottom-controls {
+    position: absolute;
+    bottom: 6px;
+    right: 56px;
+    display: flex;
+    gap: 4px;
+    z-index: 120;
+  }
+  .ctrl-btn {
+    width: 32px; height: 32px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: rgba(255,255,255,0.9);
+    color: var(--muted);
+    font-size: 15px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all .18s ease;
+    backdrop-filter: blur(4px);
+  }
+  .ctrl-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-lt);
+  }
+  @media (max-width: 700px) {
+    .bottom-controls { right: 38px; }
+    .ctrl-btn { width: 28px; height: 28px; font-size: 13px; }
   }
 
   /* ── Reader layout ── */
@@ -155,7 +143,6 @@
     box-shadow: inset -4px 0 12px rgba(0,0,0,0.06), 4px 2px 16px rgba(27,31,59,.18);
   }
   .display-left canvas, .display-right canvas { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
-  .click-zone.zoom-target { cursor: zoom-in; }
 
   /* ── Spine shadow ── */
   .book::before {
@@ -180,13 +167,6 @@
   .display-left .page-num { left: 12px; }
   .display-right .page-num { right: 12px; }
 
-  .click-zone {
-    position: absolute; top: 0; width: 50%; height: 100%;
-    cursor: pointer; z-index: 50;
-  }
-  .click-zone.left { left: 0; }
-  .click-zone.right { left: 50%; }
-
   .page-indicator {
     position: absolute;
     bottom: 10px;
@@ -202,78 +182,6 @@
     pointer-events: none;
   }
   .page-indicator strong { color: #FCE6F3; font-weight: 600; }
-
-  /* ── Zoom modal ── */
-  .zoom-overlay {
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(10,12,24,0.94);
-    display: none; z-index: 500;
-    flex-direction: column;
-  }
-  .zoom-overlay.active { display: flex; }
-  .zoom-header {
-    flex-shrink: 0;
-    padding: 10px 20px;
-    background: rgba(27,31,59,0.95);
-    color: #fff;
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    justify-content: space-between;
-    box-shadow: 0 2px 12px rgba(0,0,0,.4);
-  }
-  .zoom-title { font-family: 'Cormorant Garamond', serif; font-size: 1.1rem; letter-spacing: .08em; }
-  .zoom-controls { display: flex; gap: 8px; align-items: center; }
-  .zoom-btn {
-    background: rgba(255,255,255,.08);
-    border: 1px solid rgba(255,255,255,.25);
-    color: #fff;
-    width: 36px; height: 36px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 1rem;
-    display: flex; align-items: center; justify-content: center;
-    transition: all .15s ease;
-  }
-  .zoom-btn:hover { background: rgba(255,255,255,.18); border-color: var(--accent); }
-  .zoom-level { color: #fff; font-size: .8rem; min-width: 48px; text-align: center; letter-spacing: .05em; }
-  .zoom-stage {
-    flex: 1;
-    overflow: auto;
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    padding: 20px;
-    background:
-      radial-gradient(ellipse at center, rgba(212,0,122,0.04) 0%, transparent 60%),
-      #0a0c18;
-  }
-  .zoom-canvas-wrap {
-    display: inline-block;
-    background: #fff;
-    box-shadow: 0 8px 40px rgba(0,0,0,.5);
-    border-radius: 4px;
-    overflow: hidden;
-  }
-  .zoom-canvas-wrap canvas { display: block; }
-  .zoom-nav {
-    position: absolute;
-    top: 50%; transform: translateY(-50%);
-    background: rgba(27,31,59,0.7);
-    border: 1px solid rgba(255,255,255,.25);
-    color: #fff;
-    width: 44px; height: 80px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 22px;
-    display: flex; align-items: center; justify-content: center;
-    z-index: 510;
-  }
-  .zoom-nav:hover:not(:disabled) { background: rgba(212,0,122,0.6); }
-  .zoom-nav:disabled { opacity: .2; cursor: default; }
-  .zoom-nav.prev { left: 14px; }
-  .zoom-nav.next { right: 14px; }
 
   /* ── Thumbnail strip ── */
   .thumb-strip {
@@ -320,20 +228,8 @@
     background: #fafafa;
   }
 
-  .fullscreen-active .header { display: none; }
-
-  /* ── Embed mode: compact header, maximize book space ── */
-  .embed-mode .header {
-    padding: 6px 16px;
-  }
-  .embed-mode .logo { font-size: 1rem; }
-  .embed-mode .side-nav { width: 36px; }
-  .embed-mode .side-nav-btn { width: 30px; height: 56px; font-size: 16px; }
-  .embed-mode .thumb-strip { left: 36px; right: 36px; }
-  .embed-mode .book-area { padding: 4px 0; }
-
-  /* ── no-header mode: hide header entirely ── */
-  .no-header .header { display: none; }
+  /* ── Fullscreen background ── */
+  .fullscreen-active { background: var(--bg); }
 
   /* ── Mobile single-page mode ── */
   .mobile-mode .book { transform: none; }
@@ -358,14 +254,6 @@
 </head>
 <body>
 
-<div class="header">
-  <div class="logo" id="catalogTitle">AMEKOR <span>CATALOG</span></div>
-  <div class="header-actions">
-    <button class="btn btn-icon" id="thumbToggle" onclick="toggleThumbs()" title="Thumbnails">&#9783;</button>
-    <button class="btn btn-icon" id="fullscreenBtn" onclick="toggleFullscreen()" title="Fullscreen">&#9974;</button>
-  </div>
-</div>
-
 <div class="stage" id="stage">
   <div class="reader-layout" id="readerLayout">
     <div class="side-nav">
@@ -375,34 +263,17 @@
       <div class="book" id="book">
         <div class="display-left" id="displayLeft"><div class="empty-page"></div></div>
         <div class="display-right" id="displayRight"><div class="empty-page"></div></div>
-        <div class="click-zone left zoom-target" onclick="openZoom('left')"></div>
-        <div class="click-zone right zoom-target" onclick="openZoom('right')"></div>
         <div class="page-indicator" id="pageIndicator"></div>
       </div>
     </div>
-
-    <!-- Zoom modal -->
-    <div class="zoom-overlay" id="zoomOverlay">
-      <div class="zoom-header">
-        <div class="zoom-title" id="zoomTitle">Page 1</div>
-        <div class="zoom-controls">
-          <button class="zoom-btn" onclick="zoomOut()" title="Zoom out">&minus;</button>
-          <span class="zoom-level" id="zoomLevel">100%</span>
-          <button class="zoom-btn" onclick="zoomIn()" title="Zoom in">+</button>
-          <button class="zoom-btn" onclick="zoomReset()" title="Reset">&#10226;</button>
-          <button class="zoom-btn" onclick="closeZoom()" title="Close" style="background:rgba(212,0,122,.3);border-color:var(--accent);">&#10005;</button>
-        </div>
-      </div>
-      <div class="zoom-stage" id="zoomStage">
-        <button class="zoom-nav prev" id="zoomPrev" onclick="zoomNav(-1)">&#8249;</button>
-        <div class="zoom-canvas-wrap" id="zoomCanvasWrap"></div>
-        <button class="zoom-nav next" id="zoomNext" onclick="zoomNav(1)">&#8250;</button>
-      </div>
-    </div>
-
     <div class="side-nav">
       <button class="side-nav-btn" id="nextBtn" onclick="nextPage()">&#8250;</button>
     </div>
+  </div>
+
+  <div class="bottom-controls">
+    <button class="ctrl-btn" id="thumbToggle" onclick="toggleThumbs()" title="Thumbnails">&#9783;</button>
+    <button class="ctrl-btn" id="fullscreenBtn" onclick="toggleFullscreen()" title="Fullscreen">&#9974;</button>
   </div>
 
   <div class="thumb-strip" id="thumbStrip"></div>
@@ -421,14 +292,7 @@
   const catalogTitle = params.get('title') || 'Catalog';
   const startPage = parseInt(params.get('page') || '1', 10);
 
-  const embedMode = params.has('embed');
-  const noHeader = params.has('noheader');
   const forceSpread = params.has('spread');
-  if (embedMode) document.body.classList.add('embed-mode');
-  if (noHeader) document.body.classList.add('no-header');
-
-  document.getElementById('catalogTitle').innerHTML =
-    'AMEKOR <span>' + catalogTitle.toUpperCase().replace(/[<>"'&]/g, '') + '</span>';
   document.title = 'Amekor ' + catalogTitle;
 
   if (!pdfUrl) {
@@ -532,12 +396,9 @@
   // ── Sizing ──
   function sizeBook() {
     if (totalPages === 0) return;
-    const header = document.querySelector('.header');
-    const isFS = document.body.classList.contains('fullscreen-active');
-    const headerH = isFS ? 0 : header.offsetHeight;
     const sideNavW = window.innerWidth <= 700 ? 32 : 48;
     const availW = window.innerWidth - sideNavW * 2 - 16;
-    const availH = window.innerHeight - headerH - 16;
+    const availH = window.innerHeight - 16;
 
     let bookW, bookH;
     if (isMobileMode) {
@@ -860,7 +721,6 @@
 
   // ── Keyboard ──
   document.addEventListener('keydown', (e) => {
-    if (document.getElementById('zoomOverlay').classList.contains('active')) return;
     if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); window.nextPage(); }
     if (e.key === 'ArrowLeft') { e.preventDefault(); window.prevPage(); }
   });
@@ -895,132 +755,29 @@
 
   window.toggleThumbs = () => thumbStrip.classList.toggle('visible');
 
-  // ── Fullscreen ──
+  // ── Fullscreen (works on mobile too) ──
   window.toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch(() => {});
-      document.body.classList.add('fullscreen-active');
+    const el = document.documentElement;
+    const isFS = document.fullscreenElement || document.webkitFullscreenElement;
+    if (!isFS) {
+      const rfs = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+      if (rfs) {
+        rfs.call(el).catch(() => {});
+        document.body.classList.add('fullscreen-active');
+      }
     } else {
-      document.exitFullscreen();
+      const efs = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+      if (efs) efs.call(document);
       document.body.classList.remove('fullscreen-active');
     }
   };
-  document.addEventListener('fullscreenchange', () => {
-    if (!document.fullscreenElement) document.body.classList.remove('fullscreen-active');
+  const fsChange = () => {
+    const isFS = document.fullscreenElement || document.webkitFullscreenElement;
+    if (!isFS) document.body.classList.remove('fullscreen-active');
     requestAnimationFrame(() => { sizeBook(); showSpread(currentSpread); });
-  });
-  if (isIPhone) document.getElementById('fullscreenBtn').style.display = 'none';
-
-  // ── Zoom modal — renders direct from PDF at full resolution ──
-  const zoomOverlay = document.getElementById('zoomOverlay');
-  const zoomCanvasWrap = document.getElementById('zoomCanvasWrap');
-  const zoomLevelEl = document.getElementById('zoomLevel');
-  const zoomTitleEl = document.getElementById('zoomTitle');
-  const zoomPrevBtn = document.getElementById('zoomPrev');
-  const zoomNextBtn = document.getElementById('zoomNext');
-  let zoomPageIdx = 0;
-  let zoomScale = 1;   // relative: 1 = fit to viewport
-  let zoomBaseScale = 1; // pdf.js scale that fits viewport
-  const ZOOM_STEP = 0.25;
-  const ZOOM_MIN = 0.5;
-  const ZOOM_MAX = 5;
-
-  window.openZoom = (side) => {
-    if (!totalPages) return;
-    if (isMobileMode) {
-      zoomPageIdx = currentSpread;
-    } else {
-      const leftIdx = currentSpread * 2;
-      const rightIdx = currentSpread * 2 + 1;
-      zoomPageIdx = side === 'left' ? leftIdx : rightIdx;
-      if (zoomPageIdx >= totalPages) zoomPageIdx = leftIdx;
-    }
-    zoomOverlay.classList.add('active');
-    requestAnimationFrame(() => requestAnimationFrame(() => renderZoom()));
   };
-
-  window.closeZoom = () => {
-    zoomOverlay.classList.remove('active');
-    zoomCanvasWrap.innerHTML = '';
-  };
-
-  function calcZoomBaseScale() {
-    const stageEl = document.getElementById('zoomStage');
-    const availW = Math.max(100, stageEl.clientWidth - 100);
-    const availH = Math.max(100, stageEl.clientHeight - 40);
-    const fitW = availW / pdfBaseWidth;
-    const fitH = availH / pdfBaseHeight;
-    return Math.min(fitW, fitH);
-  }
-
-  async function renderZoom() {
-    if (zoomPageIdx >= totalPages) return;
-    zoomBaseScale = calcZoomBaseScale();
-    zoomScale = 1;
-    await drawZoomCanvas();
-    zoomTitleEl.textContent = `Page ${zoomPageIdx + 1} of ${totalPages}`;
-    zoomPrevBtn.disabled = zoomPageIdx <= 0;
-    zoomNextBtn.disabled = zoomPageIdx >= totalPages - 1;
-  }
-
-  async function drawZoomCanvas() {
-    const pdfScale = zoomBaseScale * zoomScale;
-    const page = await pdfDoc.getPage(zoomPageIdx + 1);
-    const vp = page.getViewport({ scale: pdfScale });
-    const c = document.createElement('canvas');
-    c.width = vp.width;
-    c.height = vp.height;
-    const ctx = c.getContext('2d');
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-    await page.render({ canvasContext: ctx, viewport: vp }).promise;
-    zoomCanvasWrap.innerHTML = '';
-    zoomCanvasWrap.appendChild(c);
-    zoomLevelEl.textContent = Math.round(zoomScale * 100) + '%';
-  }
-
-  window.zoomIn = () => { zoomScale = Math.min(ZOOM_MAX, zoomScale + ZOOM_STEP); drawZoomCanvas(); };
-  window.zoomOut = () => { zoomScale = Math.max(ZOOM_MIN, zoomScale - ZOOM_STEP); drawZoomCanvas(); };
-  window.zoomReset = () => { zoomScale = 1; drawZoomCanvas(); };
-  window.zoomNav = async (delta) => {
-    const next = zoomPageIdx + delta;
-    if (next < 0 || next >= totalPages) return;
-    zoomPageIdx = next;
-    if (!isMobileMode) {
-      const newSpread = Math.floor(zoomPageIdx / 2);
-      if (newSpread !== currentSpread) {
-        currentSpread = newSpread;
-        await showSpread(currentSpread);
-      }
-    } else {
-      if (zoomPageIdx !== currentSpread) {
-        currentSpread = zoomPageIdx;
-        await showSpread(currentSpread);
-      }
-    }
-    await renderZoom();
-  };
-
-  document.getElementById('zoomStage').addEventListener('wheel', (e) => {
-    if (!zoomOverlay.classList.contains('active')) return;
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-      if (e.deltaY < 0) window.zoomIn(); else window.zoomOut();
-    }
-  }, { passive: false });
-
-  document.addEventListener('keydown', (e) => {
-    if (!zoomOverlay.classList.contains('active')) return;
-    if (e.key === 'Escape') { e.preventDefault(); window.closeZoom(); }
-    else if (e.key === '+' || e.key === '=') { e.preventDefault(); window.zoomIn(); }
-    else if (e.key === '-') { e.preventDefault(); window.zoomOut(); }
-    else if (e.key === 'ArrowRight') { e.preventDefault(); window.zoomNav(1); }
-    else if (e.key === 'ArrowLeft') { e.preventDefault(); window.zoomNav(-1); }
-  });
-
-  document.getElementById('zoomStage').addEventListener('click', (e) => {
-    if (e.target.id === 'zoomStage') window.closeZoom();
-  });
+  document.addEventListener('fullscreenchange', fsChange);
+  document.addEventListener('webkitfullscreenchange', fsChange);
 
   // ── Touch: swipe on book ──
   (function setupSwipe() {
@@ -1051,57 +808,6 @@
         if (dx < 0) window.nextPage(); else window.prevPage();
       }
     }, { passive: false });
-  })();
-
-  // ── Touch: swipe + pinch in zoom ──
-  (function setupZoomTouch() {
-    const stageEl = document.getElementById('zoomStage');
-    let pinchStartDist = 0, pinchStartScale = 1, pinching = false;
-    let sx = 0, sy = 0, st = 0, tracking = false;
-    const SWIPE_MIN_X = 60;
-    const SWIPE_MAX_Y = 80;
-    const SWIPE_MAX_T = 600;
-
-    const dist = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
-
-    stageEl.addEventListener('touchstart', (e) => {
-      if (e.touches.length === 2) {
-        pinching = true; tracking = false;
-        pinchStartDist = dist(e.touches[0], e.touches[1]);
-        pinchStartScale = zoomScale;
-        e.preventDefault();
-      } else if (e.touches.length === 1) {
-        const t = e.touches[0];
-        sx = t.clientX; sy = t.clientY; st = Date.now();
-        tracking = true; pinching = false;
-      }
-    }, { passive: false });
-
-    stageEl.addEventListener('touchmove', (e) => {
-      if (pinching && e.touches.length === 2) {
-        const d = dist(e.touches[0], e.touches[1]);
-        const newScale = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, pinchStartScale * (d / pinchStartDist)));
-        if (Math.abs(newScale - zoomScale) > 0.02) {
-          zoomScale = newScale;
-          drawZoomCanvas();
-        }
-        e.preventDefault();
-      }
-    }, { passive: false });
-
-    stageEl.addEventListener('touchend', (e) => {
-      if (pinching) { if (e.touches.length < 2) pinching = false; return; }
-      if (!tracking) return;
-      tracking = false;
-      if (zoomScale > 1.05) return; // don't swipe-nav when zoomed in
-      const t = e.changedTouches[0];
-      const dx = t.clientX - sx;
-      const dy = t.clientY - sy;
-      const dt = Date.now() - st;
-      if (dt < SWIPE_MAX_T && Math.abs(dx) > SWIPE_MIN_X && Math.abs(dy) < SWIPE_MAX_Y) {
-        if (dx < 0) window.zoomNav(1); else window.zoomNav(-1);
-      }
-    });
   })();
 </script>
 
