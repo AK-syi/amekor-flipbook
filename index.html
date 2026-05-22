@@ -276,15 +276,41 @@
     box-shadow: 0 4px 20px rgba(27,31,59,.18);
   }
   .mobile-mode .display-right { display: none; }
-  .mobile-mode .click-zone.left { width: 50%; }
-  .mobile-mode .click-zone.right { left: 50%; width: 50%; }
 
   @media (max-width: 700px) {
     .side-nav { width: 32px; }
     .side-nav-btn { width: 28px; height: 52px; font-size: 16px; }
-    .header { padding: 8px 12px; }
-    .logo { font-size: 1rem; }
     .thumb-strip { left: 32px; right: 32px; }
+  }
+
+  /* ── Print support ── */
+  #printContainer { display: none; }
+  .printing .stage,
+  .printing .bottom-controls,
+  .printing .thumb-strip,
+  .printing .page-indicator { display: none !important; }
+  .printing #printContainer { display: block; }
+
+  @media print {
+    html, body { width: 100%; height: auto; overflow: visible; background: #fff; }
+    body * { visibility: hidden; }
+    #printContainer, #printContainer * { visibility: visible; }
+    #printContainer {
+      display: block !important;
+      position: absolute;
+      left: 0; top: 0;
+      width: 100%;
+    }
+    .print-page {
+      display: block;
+      width: 100%;
+      height: auto;
+      page-break-after: always;
+      break-after: page;
+    }
+    .print-page:last-child { page-break-after: avoid; break-after: avoid; }
+    .stage, .bottom-controls, .thumb-strip, .page-indicator,
+    .loading-overlay, .side-nav { display: none !important; }
   }
 </style>
 </head>
@@ -840,7 +866,6 @@
   window.printPages = async (mode) => {
     printMenu.classList.remove('visible');
 
-    // Determine which pages to print
     let pageIndices = [];
     if (mode === 'current') {
       if (isMobileMode) {
@@ -853,24 +878,17 @@
       for (let i = 0; i < totalPages; i++) pageIndices.push(i);
     }
 
-    // Render pages at high quality into a print window
+    // Render into hidden print container in same document (avoids cross-origin block)
+    let printContainer = document.getElementById('printContainer');
+    if (!printContainer) {
+      printContainer = document.createElement('div');
+      printContainer.id = 'printContainer';
+      document.body.appendChild(printContainer);
+    }
+    printContainer.innerHTML = '';
+    document.body.classList.add('printing');
+
     const PRINT_SCALE = 4;
-    const printWin = window.open('', '_blank');
-    if (!printWin) { alert('Please allow popups to print.'); return; }
-
-    printWin.document.write(`<!DOCTYPE html><html><head><title>Print - ${catalogTitle}</title>
-      <style>
-        * { margin: 0; padding: 0; }
-        body { background: #fff; }
-        .page { page-break-after: always; display: flex; align-items: center; justify-content: center; }
-        .page:last-child { page-break-after: auto; }
-        .page img { max-width: 100%; max-height: 100vh; display: block; }
-        @media print {
-          @page { margin: 0; }
-          .page { height: 100vh; }
-        }
-      </style></head><body>`);
-
     for (const idx of pageIndices) {
       const page = await pdfDoc.getPage(idx + 1);
       const vp = page.getViewport({ scale: PRINT_SCALE });
@@ -881,17 +899,21 @@
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
       await page.render({ canvasContext: ctx, viewport: vp }).promise;
-      const dataUrl = c.toDataURL('image/png');
-      printWin.document.write(`<div class="page"><img src="${dataUrl}"></div>`);
+      const img = new Image();
+      img.src = c.toDataURL('image/png');
+      img.className = 'print-page';
+      printContainer.appendChild(img);
     }
 
-    printWin.document.write('</body></html>');
-    printWin.document.close();
+    // Brief delay for images to decode, then print
+    await new Promise(r => setTimeout(r, 200));
+    window.print();
 
-    // Wait for images to load then trigger print
-    printWin.onload = () => {
-      setTimeout(() => { printWin.print(); }, 300);
-    };
+    // Cleanup after print dialog closes
+    setTimeout(() => {
+      document.body.classList.remove('printing');
+      printContainer.innerHTML = '';
+    }, 500);
   };
 
   // ── Touch: swipe on book ──
