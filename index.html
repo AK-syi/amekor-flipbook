@@ -896,7 +896,7 @@
       dataUrls.push(c.toDataURL('image/png'));
     }
 
-    // Build standalone print page as blob and open in new tab
+    // Build standalone print page in a hidden iframe (no redirect, no new tab)
     const imgsHtml = dataUrls.map(src =>
       `<img src="${src}" style="display:block;max-width:100vw;max-height:100vh;width:auto;height:auto;object-fit:contain;margin:0 auto;page-break-after:always;">`
     ).join('\n');
@@ -905,13 +905,27 @@
 @page{margin:0;size:auto}
 html,body{margin:0;padding:0;background:#fff}
 img:last-child{page-break-after:avoid}
-</style></head><body>${imgsHtml}
-<script>window.onload=function(){setTimeout(function(){window.print()},300)}<\/script>
-</body></html>`;
+</style></head><body>${imgsHtml}</body></html>`;
+
+    // Remove old print iframe if exists
+    let pf = document.getElementById('printFrame');
+    if (pf) pf.remove();
 
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
-    window.open(url, '_blank');
+
+    pf = document.createElement('iframe');
+    pf.id = 'printFrame';
+    pf.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;border:none;visibility:hidden;';
+    pf.src = url;
+    document.body.appendChild(pf);
+
+    pf.onload = () => {
+      setTimeout(() => {
+        pf.contentWindow.print();
+        setTimeout(() => { pf.remove(); URL.revokeObjectURL(url); }, 1000);
+      }, 300);
+    };
   };
 
   // ── Touch: swipe on book ──
