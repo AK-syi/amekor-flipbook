@@ -46,7 +46,8 @@
   .bottom-controls {
     position: absolute;
     bottom: 6px;
-    right: 56px;
+    left: 50%;
+    transform: translateX(-50%);
     display: flex;
     gap: 4px;
     z-index: 120;
@@ -64,14 +65,49 @@
     justify-content: center;
     transition: all .18s ease;
     backdrop-filter: blur(4px);
+    position: relative;
   }
   .ctrl-btn:hover {
     border-color: var(--accent);
     color: var(--accent);
     background: var(--accent-lt);
   }
+
+  /* ── Print dropdown ── */
+  .print-menu {
+    display: none;
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-bottom: 6px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 4px 16px rgba(27,31,59,.15);
+    overflow: hidden;
+    white-space: nowrap;
+    z-index: 130;
+  }
+  .print-menu.visible { display: block; }
+  .print-option {
+    display: block;
+    width: 100%;
+    padding: 8px 16px;
+    border: none;
+    background: none;
+    color: var(--ink);
+    font-family: 'DM Sans', sans-serif;
+    font-size: .75rem;
+    letter-spacing: .05em;
+    cursor: pointer;
+    text-align: left;
+    transition: background .15s;
+  }
+  .print-option:hover { background: var(--accent-lt); color: var(--accent); }
+  .print-option + .print-option { border-top: 1px solid var(--border); }
+
   @media (max-width: 700px) {
-    .bottom-controls { right: 38px; }
     .ctrl-btn { width: 28px; height: 28px; font-size: 13px; }
   }
 
@@ -273,6 +309,11 @@
 
   <div class="bottom-controls">
     <button class="ctrl-btn" id="thumbToggle" onclick="toggleThumbs()" title="Thumbnails">&#9783;</button>
+    <button class="ctrl-btn" id="printBtn" onclick="togglePrintMenu()" title="Print">&#128438;</button>
+    <div class="print-menu" id="printMenu">
+      <button class="print-option" onclick="printPages('current')">Print current spread</button>
+      <button class="print-option" onclick="printPages('all')">Print all pages</button>
+    </div>
     <button class="ctrl-btn" id="fullscreenBtn" onclick="toggleFullscreen()" title="Fullscreen">&#9974;</button>
   </div>
 
@@ -755,27 +796,25 @@
 
   window.toggleThumbs = () => thumbStrip.classList.toggle('visible');
 
-  // ── Fullscreen ──
+  // ── Fullscreen (desktop only — hidden on mobile) ──
   const canFullscreen = !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
+  if (!canFullscreen || isMobile || isTablet) {
+    document.getElementById('fullscreenBtn').style.display = 'none';
+  }
 
   window.toggleFullscreen = () => {
-    if (canFullscreen) {
-      const el = document.documentElement;
-      const isFS = document.fullscreenElement || document.webkitFullscreenElement;
-      if (!isFS) {
-        const rfs = el.requestFullscreen || el.webkitRequestFullscreen;
-        if (rfs) {
-          rfs.call(el).catch(() => {});
-          document.body.classList.add('fullscreen-active');
-        }
-      } else {
-        const efs = document.exitFullscreen || document.webkitExitFullscreen;
-        if (efs) efs.call(document);
-        document.body.classList.remove('fullscreen-active');
+    const el = document.documentElement;
+    const isFS = document.fullscreenElement || document.webkitFullscreenElement;
+    if (!isFS) {
+      const rfs = el.requestFullscreen || el.webkitRequestFullscreen;
+      if (rfs) {
+        rfs.call(el).catch(() => {});
+        document.body.classList.add('fullscreen-active');
       }
     } else {
-      // iOS / no fullscreen API — open in new tab at full viewport
-      window.open(window.location.href, '_blank');
+      const efs = document.exitFullscreen || document.webkitExitFullscreen;
+      if (efs) efs.call(document);
+      document.body.classList.remove('fullscreen-active');
     }
   };
   const fsChange = () => {
@@ -785,6 +824,75 @@
   };
   document.addEventListener('fullscreenchange', fsChange);
   document.addEventListener('webkitfullscreenchange', fsChange);
+
+  // ── Print ──
+  const printMenu = document.getElementById('printMenu');
+  window.togglePrintMenu = () => {
+    printMenu.classList.toggle('visible');
+  };
+  // Close menu on outside click
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#printBtn') && !e.target.closest('#printMenu')) {
+      printMenu.classList.remove('visible');
+    }
+  });
+
+  window.printPages = async (mode) => {
+    printMenu.classList.remove('visible');
+
+    // Determine which pages to print
+    let pageIndices = [];
+    if (mode === 'current') {
+      if (isMobileMode) {
+        pageIndices = [currentSpread];
+      } else {
+        pageIndices.push(currentSpread * 2);
+        if (currentSpread * 2 + 1 < totalPages) pageIndices.push(currentSpread * 2 + 1);
+      }
+    } else {
+      for (let i = 0; i < totalPages; i++) pageIndices.push(i);
+    }
+
+    // Render pages at high quality into a print window
+    const PRINT_SCALE = 4;
+    const printWin = window.open('', '_blank');
+    if (!printWin) { alert('Please allow popups to print.'); return; }
+
+    printWin.document.write(`<!DOCTYPE html><html><head><title>Print - ${catalogTitle}</title>
+      <style>
+        * { margin: 0; padding: 0; }
+        body { background: #fff; }
+        .page { page-break-after: always; display: flex; align-items: center; justify-content: center; }
+        .page:last-child { page-break-after: auto; }
+        .page img { max-width: 100%; max-height: 100vh; display: block; }
+        @media print {
+          @page { margin: 0; }
+          .page { height: 100vh; }
+        }
+      </style></head><body>`);
+
+    for (const idx of pageIndices) {
+      const page = await pdfDoc.getPage(idx + 1);
+      const vp = page.getViewport({ scale: PRINT_SCALE });
+      const c = document.createElement('canvas');
+      c.width = vp.width;
+      c.height = vp.height;
+      const ctx = c.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      await page.render({ canvasContext: ctx, viewport: vp }).promise;
+      const dataUrl = c.toDataURL('image/png');
+      printWin.document.write(`<div class="page"><img src="${dataUrl}"></div>`);
+    }
+
+    printWin.document.write('</body></html>');
+    printWin.document.close();
+
+    // Wait for images to load then trigger print
+    printWin.onload = () => {
+      setTimeout(() => { printWin.print(); }, 300);
+    };
+  };
 
   // ── Touch: swipe on book ──
   (function setupSwipe() {
