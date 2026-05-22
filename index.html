@@ -880,17 +880,9 @@
       for (let i = 0; i < totalPages; i++) pageIndices.push(i);
     }
 
-    // Render into hidden print container in same document (avoids cross-origin block)
-    let printContainer = document.getElementById('printContainer');
-    if (!printContainer) {
-      printContainer = document.createElement('div');
-      printContainer.id = 'printContainer';
-      document.body.appendChild(printContainer);
-    }
-    printContainer.innerHTML = '';
-    document.body.classList.add('printing');
-
+    // Render pages to data URLs
     const PRINT_SCALE = 4;
+    const dataUrls = [];
     for (const idx of pageIndices) {
       const page = await pdfDoc.getPage(idx + 1);
       const vp = page.getViewport({ scale: PRINT_SCALE });
@@ -901,21 +893,25 @@
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
       await page.render({ canvasContext: ctx, viewport: vp }).promise;
-      const img = new Image();
-      img.src = c.toDataURL('image/png');
-      img.className = 'print-page';
-      printContainer.appendChild(img);
+      dataUrls.push(c.toDataURL('image/png'));
     }
 
-    // Brief delay for images to decode, then print
-    await new Promise(r => setTimeout(r, 200));
-    window.print();
+    // Build standalone print page as blob and open in new tab
+    const imgsHtml = dataUrls.map(src =>
+      `<img src="${src}" style="display:block;max-width:100vw;max-height:100vh;width:auto;height:auto;object-fit:contain;margin:0 auto;page-break-after:always;">`
+    ).join('\n');
 
-    // Cleanup after print dialog closes
-    setTimeout(() => {
-      document.body.classList.remove('printing');
-      printContainer.innerHTML = '';
-    }, 500);
+    const html = `<!DOCTYPE html><html><head><title>Print - ${catalogTitle}</title><style>
+@page{margin:0;size:auto}
+html,body{margin:0;padding:0;background:#fff}
+img:last-child{page-break-after:avoid}
+</style></head><body>${imgsHtml}
+<script>window.onload=function(){setTimeout(function(){window.print()},300)}<\/script>
+</body></html>`;
+
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
   };
 
   // ── Touch: swipe on book ──
