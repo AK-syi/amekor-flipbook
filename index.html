@@ -118,7 +118,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 8px 0;
+    padding: 0;
     perspective: 2000px;
     position: relative;
   }
@@ -397,8 +397,8 @@
   function sizeBook() {
     if (totalPages === 0) return;
     const sideNavW = window.innerWidth <= 700 ? 32 : 48;
-    const availW = window.innerWidth - sideNavW * 2 - 16;
-    const availH = window.innerHeight - 16;
+    const availW = window.innerWidth - sideNavW * 2 - 8;
+    const availH = window.innerHeight - 4;
 
     let bookW, bookH;
     if (isMobileMode) {
