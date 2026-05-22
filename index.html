@@ -408,7 +408,7 @@
   // ── Detect mobile → single page mode ──
   function checkMobileMode() {
     const wasMobile = isMobileMode;
-    isMobileMode = window.innerWidth < 700;
+    isMobileMode = forceSpread ? window.innerWidth < 500 : window.innerWidth < 700;
     if (isMobileMode) {
       stage.classList.add('mobile-mode');
     } else {
