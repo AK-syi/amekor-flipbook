@@ -122,14 +122,14 @@
 
   .side-nav {
     flex-shrink: 0;
-    width: 48px;
+    width: 36px;
     height: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
   }
   .side-nav-btn {
-    width: 40px; height: 72px;
+    width: 32px; height: 64px;
     border-radius: var(--radius);
     border: 1px solid var(--border);
     background: var(--surface);
@@ -278,9 +278,9 @@
   .mobile-mode .display-right { display: none; }
 
   @media (max-width: 700px) {
-    .side-nav { width: 32px; }
-    .side-nav-btn { width: 28px; height: 52px; font-size: 16px; }
-    .thumb-strip { left: 32px; right: 32px; }
+    .side-nav { width: 28px; }
+    .side-nav-btn { width: 24px; height: 48px; font-size: 14px; }
+    .thumb-strip { left: 28px; right: 28px; }
   }
 
   /* ── Print support ── */
@@ -463,9 +463,9 @@
   // ── Sizing ──
   function sizeBook() {
     if (totalPages === 0) return;
-    const sideNavW = window.innerWidth <= 700 ? 32 : 48;
-    const availW = window.innerWidth - sideNavW * 2 - 8;
-    const availH = window.innerHeight - 4;
+    const sideNavW = window.innerWidth <= 700 ? 28 : 36;
+    const availW = window.innerWidth - sideNavW * 2;
+    const availH = window.innerHeight - 40;
 
     let bookW, bookH;
     if (isMobileMode) {
