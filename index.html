@@ -116,22 +116,21 @@
     display: flex;
     align-items: flex-start;
     justify-content: center;
-    position: relative;
   }
 
   .side-nav {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    z-index: 50;
+    flex-shrink: 0;
+    width: 32px;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
-  .side-nav.nav-left { left: 4px; }
-  .side-nav.nav-right { right: 4px; }
   .side-nav-btn {
-    width: 30px; height: 60px;
+    width: 28px; height: 60px;
     border-radius: var(--radius);
-    border: 1px solid rgba(205,209,227,0.6);
-    background: rgba(255,255,255,0.75);
+    border: 1px solid var(--border);
+    background: var(--surface);
     color: var(--muted);
     font-size: 20px;
     cursor: pointer;
@@ -139,17 +138,16 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    backdrop-filter: blur(4px);
   }
   .side-nav-btn:hover:not(:disabled) {
     border-color: var(--accent);
     color: var(--accent);
-    background: rgba(252,230,243,0.85);
+    background: var(--accent-lt);
   }
-  .side-nav-btn:disabled { opacity: 0.15; cursor: default; }
+  .side-nav-btn:disabled { opacity: 0.25; cursor: default; }
 
   .book-area {
-    width: 100%;
+    flex: 1;
     height: 100%;
     display: flex;
     flex-direction: column;
@@ -278,8 +276,9 @@
   .mobile-mode .display-right { display: none; }
 
   @media (max-width: 700px) {
-    .side-nav-btn { width: 24px; height: 48px; font-size: 14px; }
-    .thumb-strip { left: 0; right: 0; }
+    .side-nav { width: 24px; }
+    .side-nav-btn { width: 22px; height: 48px; font-size: 14px; }
+    .thumb-strip { left: 24px; right: 24px; }
   }
 
   /* ── Print support ── */
@@ -322,6 +321,9 @@
 
 <div class="stage" id="stage">
   <div class="reader-layout" id="readerLayout">
+    <div class="side-nav">
+      <button class="side-nav-btn" id="prevBtn" onclick="prevPage()">&#8249;</button>
+    </div>
     <div class="book-area">
       <div class="book" id="book">
         <div class="display-left" id="displayLeft"><div class="empty-page"></div></div>
@@ -338,10 +340,7 @@
         <button class="ctrl-btn" id="fullscreenBtn" onclick="toggleFullscreen()" title="Fullscreen">&#9974;</button>
       </div>
     </div>
-    <div class="side-nav nav-left">
-      <button class="side-nav-btn" id="prevBtn" onclick="prevPage()">&#8249;</button>
-    </div>
-    <div class="side-nav nav-right">
+    <div class="side-nav">
       <button class="side-nav-btn" id="nextBtn" onclick="nextPage()">&#8250;</button>
     </div>
   </div>
@@ -409,7 +408,7 @@
   // ── Detect mobile → single page mode ──
   function checkMobileMode() {
     const wasMobile = isMobileMode;
-    isMobileMode = forceSpread ? false : window.innerWidth < 700;
+    isMobileMode = window.innerWidth < 700;
     if (isMobileMode) {
       stage.classList.add('mobile-mode');
     } else {
@@ -466,7 +465,8 @@
   // ── Sizing ──
   function sizeBook() {
     if (totalPages === 0) return;
-    const availW = window.innerWidth - 8;
+    const sideNavW = window.innerWidth <= 700 ? 24 : 32;
+    const availW = window.innerWidth - sideNavW * 2 - 4;
     const availH = window.innerHeight - 42;
 
     let bookW, bookH;
